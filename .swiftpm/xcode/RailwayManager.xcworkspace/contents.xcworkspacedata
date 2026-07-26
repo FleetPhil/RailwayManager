@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "absolute:/Users/phildiggens/Local Files/Swift/RailwayManager/.swiftpm/xcode/ModelRailwayHardware">
+   </FileRef>
+   <FileRef
+      location = "container:../..">
+   </FileRef>
+</Workspace>

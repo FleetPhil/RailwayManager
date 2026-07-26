@@ -1,0 +1,138 @@
+{
+    "endHour":19,
+    "startHour":9,
+    "frequency":6000,
+    "stationStop":10,
+    
+    "routineParams":[
+    ],
+
+    "layoutParams":{
+        "name": "xmas",
+        "routes":[
+            {
+                "id":1,
+                "name": "Outer",
+                "startBlock":"A",
+                "transitions":[ "AStop B", "BC", "CE", "E AStop" ]
+            },
+            {
+                "id":2,
+                "name": "Inner",
+                "startBlock":"F1",
+                "transitions":[ "F1Stop G", "GH", "HI", "I F1Stop" ]
+            },
+            {
+                "id":3,
+                "name": "Tram",
+                "startBlock":"J2",
+                "transitions":[ "J2Stop J1Stop", "J1Stop J3Stop",  "J3Stop J1Stop", "J1Stop J2Stop" ]
+            },
+            {
+                "id":4,
+                "name": "Inner/Outer/Inner",
+                "startBlock":"F1",
+                "transitions":[ "F1Stop G", "GD", "DE", "EA", "AB", "BH", "HI", "I F1Stop" ]
+            },
+            {
+                "id":5,
+                "name": "Outer/Inner/Outer",
+                "startBlock":"A",
+                "transitions":[ "AStop B", "BH", "HI", "IF1", "F1G", "GH", "HI", "IF1", "F1G", "GC", "CE", "E AStop" ]
+            },
+            {
+                "id":6,
+                "name": "Inner/Outer",
+                "startBlock":"F1",
+                "transitions":[ "F1Stop G", "GC", "CE", "E AStop" ]
+            },
+            {
+                "id":7,
+                "name": "Outer/Inner",
+                "startBlock":"A",
+                "transitions":[ "AStop B", "BH", "HI", "I F1Stop" ]
+            },
+            {
+                "id":8,
+                "name": "F2 Long Route",
+                "startBlock":"F2",
+                "transitions":[ "F2Stop F1Stop", "F1Stop G", "GH", "HI", "I F1Stop", "F1Stop G", "GC", "CE", "E AStop",  "AStop B", "BC", "CE", "E F1Stop", "F2Stop F1Stop" ]
+            },
+            {
+                "id":9,
+                "name": "F1 to F2",
+                "startBlock":"F1",
+                "transitions":[ "F1Stop F2Stop" ]
+            },
+            {
+                "id":10,
+                "name": "F2 to F1",
+                "startBlock":"F2",
+                "transitions":[ "F2Stop F1Stop" ]
+            },
+        ],
+        "trains":[
+            {
+                "id": 1,
+                "name":"Glacier Express",
+                "trainSpeeds": {
+                    "stop" :    { "power": 0, "speed": 0 },
+                    "slow" :    { "power": 5, "speed": 33 },
+                    "normal" :  { "power": 15, "speed": 40 },
+                    "fast" :    { "power": 40, "speed": 49 },
+                },
+                "transitionIntervals": {
+                    "immediate": 0.0,
+                    "quick":     0.5,
+                    "gradual":   2.0
+                },
+                "instantPower": 80
+            },
+            {
+                "id": 2,
+                "name":"Japan Express",
+                "trainSpeeds": {
+                    "stop" :    { "power": 0, "speed": 0 },
+                    "slow" :    { "power": 40, "speed": 25 },
+                    "normal" :  { "power": 60, "speed": 38 },
+                    "fast" :    { "power": 80, "speed": 45 },
+                },
+                "transitionIntervals": {
+                    "immediate": 0.0,
+                    "quick":     0.5,
+                    "gradual":   2.0
+                }
+            },
+            {
+                "id": 3,
+                "name":"Shunter",
+                "trainSpeeds": {
+                    "stop" :    { "power": 0, "speed": 0 },
+                    "slow" :    { "power": 70, "speed": 13 },
+                    "normal" :  { "power": 80, "speed": 19 },
+                    "fast" :    { "power": 90, "speed": 27 },
+                },
+                "transitionIntervals": {
+                    "immediate": 0.0,
+                    "quick":     0.5,
+                    "gradual":   1.0
+                }
+            },
+            {
+                "id": 4,
+                "name":"Tram",
+                "trainSpeeds": {
+                    "stop" :    { "power": 0, "speed": 0 },
+                    "slow" :    { "power": 12, "speed": 18 },
+                    "normal" :  { "power": 18, "speed": 22 },
+                    "fast" :    { "power": 25, "speed": 24 },
+                },
+                "transitionIntervals": {
+                    "immediate": 0.0,
+                    "quick":     0.5,
+                    "gradual":   1.0
+                }
+            },
+        ]
+    }
+}
