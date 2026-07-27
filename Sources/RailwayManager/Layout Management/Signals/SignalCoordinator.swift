@@ -2,7 +2,7 @@ import Foundation
 
 actor SignalCoordinator {
     // Refresh the signal state and return all changes
-    func refresh(snapshot: LayoutTrackSnapshot) throws -> [ Signal : SignalState ] {
+    static func refresh(snapshot: LayoutTrackSnapshot) throws -> [ Signal : SignalState ] {
         // Set initial state on all signals
         var newState: [ Signal : SignalState] = [:]
         for signal in snapshot.allSignals {
@@ -30,7 +30,7 @@ actor SignalCoordinator {
         })
     }
 
-    private func translate(_ state: SignalTrackState) -> SignalState {
+    private static func translate(_ state: SignalTrackState) -> SignalState {
         switch state {
         case    .signalIndicationNotBlockDirection,
                 .signalBlockOccupiedOppositeDirection,

@@ -14,7 +14,7 @@ struct TrainSpeedSetting: Codable, Equatable {
 struct TrainParams: Codable, Identifiable, Equatable {
     var id: Int
     var name: String
-    var address: Int?
+    var address: Int
     
     var trainSpeeds: [ TrainSpeed : TrainSpeedSetting ]
 }

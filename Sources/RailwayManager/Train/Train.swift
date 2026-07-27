@@ -63,7 +63,7 @@ struct Train: Sendable, CustomStringConvertible {
         self.name = trainParams.name
         self.speeds = trainParams.trainSpeeds
         
-        self.hardware = CBUSHardwareTrain(id: trainParams.id, address: trainParams.address!)
+        self.hardware = CBUSHardwareTrain(id: trainParams.id, address: trainParams.address)
     }
     
     nonisolated var description: String {

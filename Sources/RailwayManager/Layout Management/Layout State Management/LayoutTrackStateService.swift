@@ -60,6 +60,7 @@ struct LayoutTrackSnapshot: Sendable {
     private let pointStates: [ Point : PointRuntimeState]
 
     var allBlocks: [Block] { Array(blockStates.keys) }
+    var allTrains: [Train] { Array(trainStates.keys) }
     var allSignals: [Signal] { Array(signalStates.keys) }
     var allPoints: [Point] { Array(pointStates.keys) }
 
@@ -76,11 +77,10 @@ struct LayoutTrackSnapshot: Sendable {
 
 actor LayoutTrackStateService {
     private var blockStates: [Block: BlockRuntimeState] = [:]
-    private var trainStates: [Train: TrainRuntimeState] = [:]
-    private var trainDirections: [Train: Direction] = [:]
-    
     private var pointStates: [Point : PointRuntimeState] = [:]
     private var signalStates: [Signal : SignalState] = [:]
+    
+    let trainController = LayoutTrainController()
     
     private let layout: Layout
     
@@ -117,8 +117,8 @@ actor LayoutTrackStateService {
     }
 
     // Snapshot for read-only events, e.g. set signals, print status
-    func snapshot() -> LayoutTrackSnapshot {
-        LayoutTrackSnapshot(trainStates: trainStates,
+    func snapshot() async -> LayoutTrackSnapshot {
+        LayoutTrackSnapshot(trainStates: await trainController.trainStates,
                             blockStates: blockStates,
                             signalStates: signalStates,
                             pointStates: pointStates)
@@ -148,31 +148,20 @@ actor LayoutTrackStateService {
         }
     }
     
-    // Update the state as a train has stopped at the sensor
-    func stopAtSensor(_ sensor: Sensor) throws {
-        guard let train = blockStates[sensor.block]?.train else {
-            throw TrainError.noTrainForSetSensor(sensor.id)
+    func setStateForTrain(_ train: Train, state: TrainRuntimeState) async throws {
+        
+        if await trainController.isNewTrain(train) {
+            log.verbose("Train \(train) state request from none) to \(state)")
+        } else {
+            let oldState = try await trainController.trainState(train)
+            log.verbose("Train \(train) state request from \(oldState, default: "none") to \(state)")
         }
-        guard let direction = directionForBlock(sensor.block) else {
-            throw TrainError.noTrainDirection(train.id)
-        }
         
-        blockStates[sensor.block] = .occupied(train, direction)
-        trainStates[train] = .stoppedAtSensor(sensor)
-        
-        log.verbose("Train \(train) stopped at sensor \(sensor)")
-    }
-    
-    func setStateForTrain(_ train: Train, state: TrainRuntimeState) {
-        
-        let oldState = trainStates[train] ?? .none
-        
-        log.verbose("Train \(train) state request from \(oldState, default: "none") to \(state)")
-        trainStates[train] = state
+        await trainController.setTrainState(train, state: state)
     }
     
     func setStateForBlock(_ block: Block, newState: BlockRuntimeState) async throws {
-        guard let oldState = blockStates[block] else { throw TrainError.applicationError(8) }
+        let oldState = blockStates[block] ?? .vacant(nil)
         
         guard oldState != newState else { return }
         log.verbose("Block \(block) state request from \(oldState) to \(newState)")
@@ -214,7 +203,8 @@ actor LayoutTrackStateService {
             }
         }
         
-        try await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: newState)
+        let trainState = newState.train == nil ? nil : try await trainController.trainState(newState.train!)
+        try await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: newState, trainState:trainState)
     }
 
     // Path Item is a block-block transition, maybe involving 1 or more points
@@ -243,7 +233,7 @@ actor LayoutTrackStateService {
             return .point(reservedPoint.point)
         }
 
-        let trainDirection = trainDirections[forTrain]!
+        let trainDirection = try await trainController.trainDirection(forTrain)
         try await setStateForBlock(item.toBlock, newState: .reserved(forTrain, trainDirection))
         
         for pointID in item.pointSettings.map( \.point ) {
@@ -260,7 +250,7 @@ actor LayoutTrackStateService {
     func processSensorSetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
         guard let blockState = blockStates[sensor.block] else { throw TrainError.applicationError(10) }
         guard let train = blockState.train else { throw TrainError.noTrainForSetSensor(sensor.id) }
-        guard let trainDirection = trainDirections[train] else { throw TrainError.applicationError(10) }
+        let trainDirection = try await trainController.trainDirection(train) 
         
         // The train end is relative to the train moving forward, so adjust if the block direction is reverse
         let trainDirectionSensor: TrainSensor = trainDirection == .forward ? trainSensor : trainSensor.oppositePosition

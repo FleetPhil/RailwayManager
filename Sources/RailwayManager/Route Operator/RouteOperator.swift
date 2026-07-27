@@ -100,7 +100,6 @@ actor RouteOperator {
     }
     
     func resetRoute() async throws {
-        
         // Expand the segments into individual route action items
         actionQueue = try actionsforRoute(route)
         
@@ -108,12 +107,34 @@ actor RouteOperator {
             throw TrainError.invalidRoute(route.id)
         }
         
+        // Request DCC session if necessary
+        try await trainController.requestSession(for: train)
+        
+        // Update the block and train status
+        await trainController.setTrainDirection(train, direction: routeDirection)
+        try await stateService.setStateForTrain(train, state: .idle)
+        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, routeDirection))
+        
         log.info("\(rd): \(route): Have \(route.segments.count) segments, \(actionQueue.count) actions for route \(route.id)")
+    }
+    
+    // Command a change to the train speed and update the status
+    func setTrainSpeed(_ train: Train, speed: TrainSpeed, delay: TimeInterval = 0, state: TrainRuntimeState? = nil) async throws {
+        try await trainController.commandTrain(train, speed: speed, delay: delay)
+
+        // Update the status
+        lastCommandedTrainSpeed = speed
+        // State of nil is no change
+        if let state {
+            await trainController.setTrainState(train, state: state)
+        }
     }
     
     // Process the track event and execute route commands if able based on the layout state
     // Exit with updated layout state or nil if no change or nothing processed
     func processEvent(_ event: LayoutEvent) async throws {
+        
+        log.verbose("Process event: \(event)")
         
         // Check for general cases
         switch (routeState, event) {
@@ -150,10 +171,9 @@ actor RouteOperator {
                 if layout.sensor(setSensor)!.block.blockExit[routeDirection] == .noExit {
                     // The sensor is in a block with no exit in this direction so slow down
                     if lastCommandedTrainSpeed != .slow {
-                        let block = layout.sensor(setSensor)
-                        log.debug("Setting slow speed as no exit in block \(layout.sensor(setSensor), default: "no block?"), \(routeDirection)")
-                        try await trainController.commandTrain(train, direction: routeDirection, speed: .slow, delay: 0)
-                        lastCommandedTrainSpeed = .slow
+                        let block = layout.sensor(setSensor)?.location
+                        log.debug("Setting slow speed as no exit in block \(block, default: "no block?"), \(routeDirection)")
+                        try await setTrainSpeed(train, speed: .slow)
                     }
                 }
             }
@@ -202,10 +222,13 @@ actor RouteOperator {
         case .stop:
             log.info("\(rd): Sensor \(sensor) action: Stop")
 
-            try await trainController.commandTrain(train, direction: nil, speed: .stop)
+            // Set the train state
+            try await setTrainSpeed(train, speed: .stop, state: .stoppedAtSensor(sensor))
             
             // Set the state
-            try await stateService.stopAtSensor(sensor)
+            try await stateService.setStateForBlock(sensor.block, newState: .occupied(train, routeDirection))
+            
+            log.verbose("Train \(train) stopped at sensor \(sensor)")
             
             // Carry on
             newState = .processingActions
@@ -236,7 +259,7 @@ actor RouteOperator {
                 break
             }
 
-            log.verbose("Next action: \(nextItem)")
+            log.verbose("Process action: \(nextItem)")
             
             // Process the next item
             switch nextItem {
@@ -262,32 +285,26 @@ actor RouteOperator {
                 
             case .waitForSensor(let sensor, let action):
                 // Queue the action and wait for the sensor to be set
-                    sensorActions[sensor.id] = action
-                    routeState = .waitingForEvent(.didSetSensor(sensor.id, .north))         // Orientation ignored
+                sensorActions[sensor.id] = action
+                routeState = .waitingForEvent(.didSetSensor(sensor.id, .north))         // Orientation ignored
+                try await trainController.setTrainState(train, state: .stoppingAtSensor(sensor, 0))
                 
             case .executeSensorAction(let sensor, let action):
                 routeState = try await executeSensorAction(action, sensor: sensor)
                 
             case .setDirection(let newDirection):
-                // Check for change in direction
-                if newDirection == routeDirection { break }
-                
                 // If the direction has changed the speed must be zero
                 if lastCommandedTrainSpeed != .stop {
                     log.error("Direction change for moving train \(train)")
-                    try await trainController.commandTrain(train, direction: nil, speed: .stop)
+                    try await setTrainSpeed(train, speed: .stop)
                 } else {
                     // Valid change in direction for stationary train
                     routeDirection = newDirection
-                    
-                    // Send DCC command
-                    if await trainController.session(for: train) != nil {
-                        try await trainController.commandTrain(train, direction: newDirection, speed: .stop, delay: 0)
-                    }
+                    await trainController.setTrainDirection(train, direction: newDirection)
                 }
 
             case .setSpeed(let trainSpeed):
-                try await trainController.commandTrain(train, direction: route.segments.first?.direction, speed: trainSpeed)
+                try await setTrainSpeed(train, speed: trainSpeed)
                 routeState = .processingActions
                 
             case .waitForEvent(let layoutEvent):
@@ -316,7 +333,7 @@ actor RouteOperator {
                 
             }
             
-//            print("*** End process action: state \(routeState)")
+            log.verbose("*** End process action: state \(routeState)")
         }
     }
         
@@ -333,7 +350,7 @@ actor RouteOperator {
     private func requestPathItem(_ item: PathItem) async throws -> RouteState {
         if let blockingResource = try await stateService.reservePathItem(item, forTrain: train) {
             // Stop the train
-            try await trainController.commandTrain(train, direction: nil, speed: .stop)
+            try await setTrainSpeed(train, speed: .stop, state: .stoppedForResource(blockingResource, item))
             try await stateService.setStateForBlock(
                 item.fromBlock,
                 newState : .occupied(train, item.direction))
@@ -343,13 +360,13 @@ actor RouteOperator {
         } else {
             // No blocking resource - just carry on
             // Power the route
-            try await trainController.commandTrain(train, direction: nil, speed: .normal)
+            try await setTrainSpeed(train, speed: .normal)
             
             // Update the state to reflect the new item
             try await stateService.setStateForBlock(
                 item.fromBlock,
                 newState : .occupied(train, item.direction))
-            
+                        
             return .processingActions
         }
     }

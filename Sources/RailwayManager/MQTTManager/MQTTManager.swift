@@ -93,9 +93,13 @@ actor MQTTManager: Sendable {
                                         itemID: "\(signal.id)",
                                         itemState: state.description)
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
-            try await client?.publish(to: topic + stateTopic,
-                                      payload: ByteBufferAllocator().buffer(string: payload),
-                                      qos: .atLeastOnce)
+            if GlobalOptions.noMQTT {
+//                log.debug("Payload: \(payload)")
+            } else {
+                try await client?.publish(to: topic + stateTopic,
+                                          payload: ByteBufferAllocator().buffer(string: payload),
+                                          qos: .atLeastOnce)
+            }
         } catch {
             handleJSONError(error)
             throw TrainError.applicationError(17)
@@ -108,13 +112,18 @@ actor MQTTManager: Sendable {
                                         itemID: "\(point.id)",
                                         itemState: state.rawValue)
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
-            try await client?.publish(to: topic + stateTopic,
-                                      payload: ByteBufferAllocator().buffer(string: payload),
-                                      qos: .atLeastOnce)
+            
+            if GlobalOptions.noMQTT {
+//                log.debug("Payload: \(payload)")
+            } else {
+                try await client?.publish(to: topic + stateTopic,
+                                          payload: ByteBufferAllocator().buffer(string: payload),
+                                          qos: .atLeastOnce)
+            }
         } catch {
             handleJSONError(error)
             try? await Task.sleep(for: .milliseconds(500))
-            throw TrainError.applicationError(17)
+            throw TrainError.applicationError(18)
         }
     }
 
@@ -165,12 +174,16 @@ actor MQTTManager: Sendable {
                                         additionalInformation: additionalInformation)
             
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
-            try await client?.publish(to: topic + stateTopic,
-                                      payload: ByteBufferAllocator().buffer(string: payload),
-                                      qos: .atLeastOnce)
+            if GlobalOptions.noMQTT {
+//                log.debug("Payload: \(payload)")
+            } else {
+                try await client?.publish(to: topic + stateTopic,
+                                          payload: ByteBufferAllocator().buffer(string: payload),
+                                          qos: .atLeastOnce)
+            }
         } catch {
             handleJSONError(error)
-            throw TrainError.applicationError(17)
+            throw TrainError.applicationError(19)
         }
     }
     

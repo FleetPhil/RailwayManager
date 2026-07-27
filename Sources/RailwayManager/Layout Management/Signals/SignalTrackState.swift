@@ -30,8 +30,10 @@ extension Signal {
         }
         
         // Deal with the case where the block direction conflicts with the signal direction
-        if self.direction != snapshot.blockState(self.location)?.direction {
-            return  .signalIndicationNotBlockDirection
+        if let locationBlockDirection = snapshot.blockState(self.location)?.direction {
+            if self.direction != locationBlockDirection {
+                return  .signalIndicationNotBlockDirection
+            }
         }
         
         guard let signalBlockState =  snapshot.blockState(location) else { return .unexpectedState }
@@ -45,10 +47,14 @@ extension Signal {
                 return .signalBlockOccupiedOppositeDirection
             }
             
-            // Check if the train is stopping
+            // Check if the train is stopping at a sensor in the signal block
             switch snapshot.trainState(train) {
-            case .stoppingAtSensor:
-                return .stoppingAtAssociatedSensor
+            case .stoppingAtSensor(let stopSensor, _):
+                if stopSensor.location.block == self.location {
+                    return .stoppingAtAssociatedSensor
+                } else {
+                    break
+                }
             default:    break
             }
             

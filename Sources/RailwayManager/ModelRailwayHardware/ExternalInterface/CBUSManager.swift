@@ -21,7 +21,6 @@ actor CBUSManager: Sendable {
     // Singleton
     static let shared = CBUSManager()
     
-    private nonisolated(unsafe) var CBUSEnabled: Bool = true
     private let serialPortName: String = "/dev/cu.usbmodem101"
     private let serialPort: SerialPort
     
@@ -31,9 +30,8 @@ actor CBUSManager: Sendable {
         serialPort = SerialPort(path: serialPortName)
     }
     
-    func setup(CBUSEnabled: Bool = true) throws {
-        self.CBUSEnabled = CBUSEnabled
-        if CBUSEnabled {
+    func setup() throws {
+        if GlobalOptions.noCBUS == false {
             try serialPort.openPort()
             try serialPort.setSettings(
                 baudRateSetting: .symmetrical(.baud115200),
@@ -189,7 +187,7 @@ extension CBUSManager {
 //            log.debug("Sending CBUS \(debugMessage)")
 //        }
 
-        if (CBUSEnabled) {
+        if (GlobalOptions.noCBUS == false) {
             do {
                 let _ = try serialPort.writeBytes(from: &dataToSend, size: dataToSend.count)
             } catch {

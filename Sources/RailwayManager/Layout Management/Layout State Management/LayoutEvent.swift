@@ -70,11 +70,11 @@ enum LayoutEvent: CustomStringConvertible, Equatable, Sendable {
         case .didOccupyBlock(let block, let route):
             return "block \(block) occupied by route \(route)"
         case .didFreeResource(let resource):
-            return "resource \(resource) freed"
+            return "did free resource \(resource)"
         case .didEndTimer(let route):
             return "timer ended for route \(route)"
         case .didStartRoute(let route):
-            return "start route \(route)"
+            return "did start route \(route)"
         case .didEndRoute(let route):
             return "did end routine \(route)"
             

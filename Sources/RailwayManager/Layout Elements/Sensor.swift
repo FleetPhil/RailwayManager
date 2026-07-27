@@ -52,6 +52,15 @@ enum SensorLocation: Comparable {
         case .start:              false
         }
     }
+    
+    var block: Block {
+        switch self {
+        case .end(let block, _):    block
+        case .single(let block):    block
+        case .start(let block, _):  block
+        }
+
+    }
 }
 
 struct Sensor: Equatable, Sendable, CustomStringConvertible {

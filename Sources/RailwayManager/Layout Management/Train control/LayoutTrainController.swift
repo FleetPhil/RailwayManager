@@ -2,7 +2,8 @@ import Foundation
 
 actor LayoutTrainController {
     private let dccSessionStore = DCCSessionStore()
-    private let trainDirection: [Train: Direction] = [:]
+    private(set) var trainStates: [ Train: TrainRuntimeState] = [:]
+    private var trainDirections: [Train: Direction] = [:]
 
     init() {
     }
@@ -10,6 +11,8 @@ actor LayoutTrainController {
     func activateSession(_ session: Int, forAddress address: Int) async {
         guard let train = await dccSessionStore.train(forAddress: address) else { return }
         await dccSessionStore.setActive(train, session: session)
+        
+        trainStates[train] = .idle
     }
 
     func requestSession(for train: Train) async throws {
@@ -31,7 +34,33 @@ actor LayoutTrainController {
     func session(for train: Train) async -> Int? {
         await dccSessionStore.session(for: train)
     }
-
+    
+    func trainDirection(_ train: Train) throws -> Direction {
+        guard let state = trainDirections[train] else {
+            throw TrainError.applicationError(21)
+        }
+        return state
+    }
+    
+    func setTrainDirection(_ train: Train, direction: Direction) {
+        trainDirections[train] = direction
+    }
+    
+    func isNewTrain(_ train: Train) -> Bool {
+        trainStates[train] == nil
+    }
+    
+    func trainState(_ train: Train) throws -> TrainRuntimeState {
+        guard let state = trainStates[train] else {
+            throw TrainError.applicationError(20)
+        }
+        return state
+    }
+    
+    func setTrainState(_ train: Train, state: TrainRuntimeState) {
+        trainStates[train] = state
+    }
+    
     func sendKeepAlives() async throws {
         for session in await dccSessionStore.activeSessions() {
             try await CBUSManager.shared.sendKeepAlive(session: session)
@@ -39,9 +68,12 @@ actor LayoutTrainController {
     }
     
     func commandTrain(_ train: Train,
-                      direction: Direction?,        // Default to current
                       speed: TrainSpeed,
                       delay: TimeInterval = 0) async throws {
+        
+        if GlobalOptions.noCBUS {
+            return
+        }
 
         var activeSession = await dccSessionStore.session(for: train)
         while activeSession == nil {
@@ -51,21 +83,16 @@ actor LayoutTrainController {
             // TODO: timeout this loop
         }
         
-        var newDirection: Direction? {
-            if let commandedDirection = direction { return commandedDirection }
-            if let currentDirection = trainDirection[train] { return currentDirection }
-            return nil
-        }
+        let direction = try trainDirection(train)
+        try await train.setSpeed(speed, direction: direction, delay: delay, session: activeSession!)
         
-        guard let newDirection else { throw TrainError.noTrainDirection(train.id)}
-        
-        try await train.setSpeed(speed, direction: newDirection, delay: delay, session: activeSession!)
     }
     
     func stopAllTrains() async throws {
         let activeTrains = await dccSessionStore.activeTrains()
         for activeTrain in activeTrains {
-            try await commandTrain(activeTrain, direction: .forward, speed: .stop)
+            try await commandTrain(activeTrain, speed: .stop)
+            setTrainState(activeTrain, state: .idle)
         }
     }
 }
