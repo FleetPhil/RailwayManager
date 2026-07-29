@@ -31,6 +31,7 @@ class Layout: @unchecked Sendable  {
             "\(fromBlock)-\(toBlock) \(direction): \(pointSettings.map({ $0 }))"
         }
     }
+    // The routes from the layout graph calculated at init
     var blockRoutes: [BlockRoute] = []
 
     // The layout graphs in each direction
