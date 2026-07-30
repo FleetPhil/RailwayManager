@@ -2,17 +2,10 @@ import Foundation
 
 
 enum BlockRuntimeState: Equatable {
-    case vacant(Direction?)                 // Non nil if track section blocked for direction
-    case reserved(Train, Direction)
-    case occupied(Train, Direction)
-    
-    var direction: Direction? {
-        switch self {
-        case .reserved(_, let direction): direction
-        case .occupied(_, let direction):  direction
-        case .vacant(let direction): direction
-        }
-    }
+    case vacant
+    case reserved(Train)
+    case occupied(Train)
+    case vacating(Train)
     
     var isVacant: Bool {
         switch self {
@@ -23,8 +16,15 @@ enum BlockRuntimeState: Equatable {
     
     var train: Train? {
         switch self {
-        case .reserved(let train, _), .occupied(let train, _):  train
+        case .reserved(let train), .occupied(let train), .vacating(let train):  train
         case .vacant: nil
+        }
+    }
+    
+    var vacatingTrain: Train? {
+        switch self {
+        case .vacant, .reserved, .occupied:     return nil
+        case .vacating(let train):              return train
         }
     }
 }
@@ -43,37 +43,6 @@ struct PointRuntimeState: CustomStringConvertible, Sendable, Equatable {
 }
 
 
-struct LayoutTrackSnapshot: Sendable {
-    internal init(trainStates: [ Train : TrainRuntimeState],
-                  blockStates: [Block : BlockRuntimeState],
-                  signalStates: [Signal : SignalState],
-                  pointStates: [ Point : PointRuntimeState]) {
-        self.blockStates = blockStates
-        self.trainStates = trainStates
-        self.signalStates = signalStates
-        self.pointStates = pointStates
-    }
-    
-    private let blockStates: [Block: BlockRuntimeState]
-    private let trainStates: [Train: TrainRuntimeState]
-    private let signalStates: [Signal : SignalState]
-    private let pointStates: [ Point : PointRuntimeState]
-
-    var allBlocks: [Block] { Array(blockStates.keys) }
-    var allTrains: [Train] { Array(trainStates.keys) }
-    var allSignals: [Signal] { Array(signalStates.keys) }
-    var allPoints: [Point] { Array(pointStates.keys) }
-
-    func blockState(_ block: Block) -> BlockRuntimeState? { blockStates[block] }
-    func trainState(_ train: Train) -> TrainRuntimeState? { trainStates[train] }
-    func signalState(_ signal: Signal) -> SignalState? { signalStates[signal] }
-    func pointState(_ point: Point) -> PointRuntimeState? { pointStates[point] }
-
-    func reservedTrainForPoint(_ point: Point) -> Train? {
-        return pointStates[point]?.reservedByTrain
-    }
-
-}
 
 actor LayoutTrackStateService {
     private var blockStates: [Block: BlockRuntimeState] = [:]
@@ -84,6 +53,9 @@ actor LayoutTrackStateService {
     
     private let layout: Layout
     
+    // The trains that have direction locks for each block
+    private var directionLocks: [Block : [Train]] = [:]
+    
     init(layout: Layout) {
         self.layout = layout
     }
@@ -91,7 +63,7 @@ actor LayoutTrackStateService {
     // Set defaults for block and point states
     func reset() async throws {
         blockStates = layout.blocks.reduce(into: [:]) { result, block in
-            result[block] = .vacant(nil)
+            result[block] = .vacant
         }
         
         pointStates = layout.points.reduce(into: [:], { result, point in
@@ -108,20 +80,12 @@ actor LayoutTrackStateService {
         
         // Send MQTT updates
         for block in layout.blocks {
-            try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: .vacant(nil))
+            try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: .vacant)
         }
 
         for signal in layout.signals {
             try? await MQTTManager.shared.sendSignalState(signal: signal, state: .off)
         }
-    }
-
-    // Snapshot for read-only events, e.g. set signals, print status
-    func snapshot() async -> LayoutTrackSnapshot {
-        LayoutTrackSnapshot(trainStates: await trainController.trainStates,
-                            blockStates: blockStates,
-                            signalStates: signalStates,
-                            pointStates: pointStates)
     }
 
     func signalState(_ signal: Signal) -> SignalState {
@@ -137,14 +101,10 @@ actor LayoutTrackStateService {
         blockStates[block]
     }
     
-    func directionForBlock(_ block: Block) -> Direction? {
-        blockStates[block]?.direction
-    }
-    
-    func setDirectionForVacantContiguousBlocks(fromBlock: Block, direction: Direction) {
+    func setDirectionForVacantContiguousBlocks(fromBlock: Block, train: Train, direction: Direction) async throws {
         for vacantBlock in layout.contiguousBlocks(fromBlock: fromBlock, direction: direction)
-        .filter({ blockState($0)?.isVacant ?? false }) {
-            blockStates[vacantBlock] = .vacant(direction)
+        .filter({ blockState($0)?.isVacant ?? true }) {
+            try await setDirectionLock(block: vacantBlock, train: train)
         }
     }
     
@@ -161,7 +121,7 @@ actor LayoutTrackStateService {
     }
     
     func setStateForBlock(_ block: Block, newState: BlockRuntimeState) async throws {
-        let oldState = blockStates[block] ?? .vacant(nil)
+        let oldState = blockStates[block] ?? .vacant
         
         guard oldState != newState else { return }
         log.verbose("Block \(block) state request from \(oldState) to \(newState)")
@@ -170,19 +130,32 @@ actor LayoutTrackStateService {
         case .vacant:
             if !oldState.isVacant {
                 blockStates[block] = newState
+                if let train = blockStates[block]?.train {
+                    try releaseDirectionLock(block: block, train: train)
+                }
                 await LayoutEventHub.shared.publish(.didFreeResource(.block(block)))
             }
 
-        case .reserved:
+        case .reserved(let reservedTrain):
             switch oldState {
-            case .vacant, .reserved:
-                break
-            case .occupied(let oldRoute, let state):
-                throw TrainError.invalidBlockStateChange("Can't reserve occupied block \(block). \(oldRoute), \(state)")
+            case .vacant:
+                // Clear any locks from this block for this train
+                try releaseDirectionLock(block: block, train: reservedTrain)
+
+            case .reserved(let previousReservedTrain):
+                if previousReservedTrain == reservedTrain {
+                    // Duplicate
+                    break
+                } else {
+                    throw TrainError.invalidBlockStateChange("Can't reserve \(block) for \(reservedTrain), reserved by \(previousReservedTrain)")
+                }
+                
+            case .occupied(let train), .vacating(let train):
+                throw TrainError.invalidBlockStateChange("Can't reserve occupied/vacating block \(block). \(train)")
             }
             blockStates[block] = newState
 
-        case .occupied(let newTrain, _):
+        case .occupied(let newTrain):
             switch oldState {
             case .vacant:
                 log.warning("Train \(newTrain) occupies vacant block \(block)")
@@ -190,10 +163,16 @@ actor LayoutTrackStateService {
             case .reserved:
                 break
                 
-            case .occupied(let oldTrain, let state):
+            case .occupied(let oldTrain):
                 if oldTrain != newTrain {
-                    throw TrainError.invalidBlockStateChange("Train \(newTrain) can't occupy \(block): occupied by \(oldTrain), \(state)")
+                    throw TrainError.invalidBlockStateChange("Train \(newTrain) can't occupy \(block): occupied by \(oldTrain)")
                 }
+
+            case .vacating(let oldTrain):
+                if oldTrain != newTrain {
+                    throw TrainError.invalidBlockStateChange("Train \(newTrain) can't vacate \(block): occupied by \(oldTrain)")
+                }
+
             }
             blockStates[block] = newState
             
@@ -201,22 +180,73 @@ actor LayoutTrackStateService {
                 // Block stays occupied but train changed
                 await LayoutEventHub.shared.publish(.didOccupyBlock(block, newTrain))
             }
+            
+        case .vacating(let vacatingTrain):
+            switch oldState {
+            case .vacant, .reserved:
+                break
+            case .occupied(let train), .vacating(let train):
+                if train != vacatingTrain {
+                    throw TrainError.applicationError(25)
+                }
+            }
+            blockStates[block] = newState
         }
+        
+        
         
         let trainState = newState.train == nil ? nil : try await trainController.trainState(newState.train!)
         try await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: newState, trainState:trainState)
+    }
+    
+    func releaseDirectionLock(block: Block, train: Train) throws {
+        // Release any direction lock for this train and block
+        guard let locks = directionLocks[block] else { return }
+        
+        if locks.contains(train) {
+            if let trainIndex = locks.firstIndex(of: train) {
+                directionLocks[block]!.remove(at: trainIndex)
+                if directionLocks[block]!.isEmpty {
+                    directionLocks[block] = nil
+                }
+            } else {
+                throw TrainError.noLockToRelease(block, train)
+            }
+        }
+    }
+
+    func setDirectionLock(block: Block, train: Train) async throws {
+        // Set the direction lock for this train and block - which must not exist
+        if let locks = directionLocks[block] {
+            if locks.contains(train) {
+                throw TrainError.lockAlreadyExists(block, train)
+            } else {
+                // Check the direction on current locks
+                let currentLockedDirection = try await trainController.trainDirection(locks.first!)
+                let trainDirection = try await trainController.trainDirection(train)
+                
+                if currentLockedDirection == trainDirection {
+                    directionLocks[block]!.append(train)
+                } else {
+                    throw TrainError.applicationError(23)
+                }
+            }
+        } else {
+            // No current locked direction
+            directionLocks[block, default: []].append(train)
+        }
     }
 
     // Path Item is a block-block transition, maybe involving 1 or more points
     // This function is called when the next transition is required
     func reservePathItem(_ item: PathItem, forTrain: Train) async throws -> TrackResource? {
         switch blockStates[item.toBlock] {
-        case .vacant:
+        case .vacant, .vacating:
             break
         case .occupied:
             log.debug("Route \(forTrain.id) reserve fails: \(item.toBlock) state is occupied")
             return .block(item.toBlock)
-        case .reserved(let train, _):
+        case .reserved(let train):
             if train != forTrain {
                 log.debug("Train \(forTrain) reserve fails: \(item) state is reserved for \(train)")
                 return .block(item.toBlock)
@@ -226,6 +256,20 @@ actor LayoutTrackStateService {
             break
         }
         
+        // Check any opposite direction locks on contiguous blocks
+        let trainDirection = try await trainController.trainDirection(forTrain)
+        let contiguousBlocks = layout.contiguousBlocks(fromBlock: item.toBlock, direction: trainDirection)
+        for contiguousBlock in contiguousBlocks {
+            if let locks = directionLocks[contiguousBlock] {
+                let lockedTrainDirection = try await trainController.trainDirection(locks.first!)
+                if lockedTrainDirection != trainDirection {
+                    // Block is locked in opposite direction
+                    log.verbose("Reserve fails for locked block \(contiguousBlock), direction \(lockedTrainDirection)")
+                    return .block(item.toBlock)
+                }
+            }
+        }
+        
         // Check none of the points on the path are reserved
         if let reservedPoint = item.pointSettings.first(where: {
             reservedTrainForPoint($0.point) != nil
@@ -233,8 +277,9 @@ actor LayoutTrackStateService {
             return .point(reservedPoint.point)
         }
 
-        let trainDirection = try await trainController.trainDirection(forTrain)
-        try await setStateForBlock(item.toBlock, newState: .reserved(forTrain, trainDirection))
+        try await setStateForBlock(item.toBlock, newState: .reserved(forTrain))
+        try await setDirectionForVacantContiguousBlocks(fromBlock: item.toBlock, train: forTrain, direction: trainDirection)
+        
         
         for pointID in item.pointSettings.map( \.point ) {
             try await setReservedTrainForPoint(pointID, to: forTrain, associatedStartBlock: item.fromBlock)
@@ -245,6 +290,10 @@ actor LayoutTrackStateService {
         }
         
         return nil
+    }
+    
+    func vacatingBlockForTrain(_ train: Train) -> Block? {
+        blockStates.first(where: { $0.value == .vacating(train) })?.key
     }
 
     func processSensorSetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
@@ -261,20 +310,26 @@ actor LayoutTrackStateService {
         case (true, .front):
             // Front of the train sets the first or only sensor in the block
             switch blockState {
-            case .reserved(let train, _):
+            case .reserved(let train):
                 guard let currentBlockForTrain = occupiedBlockForTrain(train) else {
                     throw TrainError.noCurrentBlockForTrainSensor(sensor.id)
                 }
                 
                 // Occupy this block
-                try await setStateForBlock(sensor.block, newState: .occupied(train, trainDirection))
+                try await setStateForBlock(sensor.block, newState: .occupied(train))
                 
-                // Free previously occupied block
-                try await setStateForBlock(currentBlockForTrain, newState: .vacant(nil))
+                // Previous block will be freed when trailing sensor passes over 
             case .occupied:
                 break
             default:
                 log.verbose("Sensor \(sensor) set on block \(sensor.block) in state \(blockState)")
+            }
+            
+        case (true, .rear):
+            if let vacatingBlock = vacatingBlockForTrain(train) {
+                try await setStateForBlock(vacatingBlock, newState: .vacant)
+            } else {
+                throw TrainError.invalidBlockStateChange("No block for train \(train) to vacate at sensor \(sensor.id)")
             }
             
         default:
@@ -376,4 +431,63 @@ actor LayoutTrackStateService {
         }
     }
 
+}
+
+struct LayoutTrackSnapshot: Sendable {
+    internal init(trainStates: [ Train : TrainRuntimeState],
+                  trainDirections: [Train : Direction],
+                  blockStates: [Block : BlockRuntimeState],
+                  directionLocks: [Block: [Train]],
+                  signalStates: [Signal : SignalState],
+                  pointStates: [ Point : PointRuntimeState]) {
+        self.blockStates = blockStates
+        self.trainStates = trainStates
+        self.trainDirections = trainDirections
+        self.signalStates = signalStates
+        self.pointStates = pointStates
+        self.directionLocks = directionLocks
+    }
+    
+    private let blockStates: [Block: BlockRuntimeState]
+    private let directionLocks: [Block: [Train]]
+    private let trainStates: [Train: TrainRuntimeState]
+    private let trainDirections: [Train: Direction]
+    private let signalStates: [Signal : SignalState]
+    private let pointStates: [ Point : PointRuntimeState]
+
+    var allBlocks: [Block] { Array(blockStates.keys) }
+    var allTrains: [Train] { Array(trainStates.keys) }
+    var allSignals: [Signal] { Array(signalStates.keys) }
+    var allPoints: [Point] { Array(pointStates.keys) }
+
+    func blockState(_ block: Block) -> BlockRuntimeState? { blockStates[block] }
+    func directionLocks(_ block: Block) -> [Train]? { directionLocks[block] }
+    func trainState(_ train: Train) -> TrainRuntimeState? { trainStates[train] }
+    func signalState(_ signal: Signal) -> SignalState? { signalStates[signal] }
+    func pointState(_ point: Point) -> PointRuntimeState? { pointStates[point] }
+
+    func reservedTrainForPoint(_ point: Point) -> Train? {
+        return pointStates[point]?.reservedByTrain
+    }
+    
+    // Return the current direction for the block
+    func blockDirection(block: Block) -> Direction? {
+        if let train = blockState(block)?.train {
+            return trainDirections[train]
+        } else {
+            return nil
+        }
+    }
+}
+
+    // Snapshot for read-only events, e.g. set signals, print status
+extension LayoutTrackStateService {
+    func snapshot() async -> LayoutTrackSnapshot {
+        LayoutTrackSnapshot(trainStates: await trainController.trainStates,
+                            trainDirections: await trainController.trainDirections,
+                            blockStates: blockStates,
+                            directionLocks: directionLocks,
+                            signalStates: signalStates,
+                            pointStates: pointStates)
+    }
 }

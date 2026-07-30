@@ -114,7 +114,7 @@ actor LayoutManager: Sendable {
         // OK all looking good
         try await setState(.running)
         
-        let routeOperator = RouteOperator(
+        let routeOperator = try RouteOperator(
             route: route,
             train: train,
             layout: layout,
@@ -122,7 +122,7 @@ actor LayoutManager: Sendable {
             trainController: trackStateService.trainController
         )
         self.routeOperators[train] = routeOperator
-        try await routeOperator.resetRoute()
+        try await routeOperator.runRoute()
         
         await LayoutEventHub.shared.publish(.didStartRoute(train))
     }

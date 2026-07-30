@@ -102,11 +102,11 @@ class Layout: @unchecked Sendable  {
     // I.e. the blocks with no intervening points
     
     func contiguousBlocks(fromBlock: Block, direction: Direction) -> [Block] {
-        var result: [Block] = []
+        var result: [Block] = [fromBlock]
         
         // Traverse the blocks from here
         while true {
-            if let next = result.last?.blockExit[direction]?.contiguousBlock {
+            if let next = result.last!.blockExit[direction]?.contiguousBlock {
                 result.append(next)
             } else {
                 break

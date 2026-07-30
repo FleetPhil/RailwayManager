@@ -30,7 +30,7 @@ extension Signal {
         }
         
         // Deal with the case where the block direction conflicts with the signal direction
-        if let locationBlockDirection = snapshot.blockState(self.location)?.direction {
+        if let locationBlockDirection = snapshot.blockDirection(block: self.location) {
             if self.direction != locationBlockDirection {
                 return  .signalIndicationNotBlockDirection
             }
@@ -39,9 +39,9 @@ extension Signal {
         guard let signalBlockState =  snapshot.blockState(location) else { return .unexpectedState }
         switch signalBlockState {
         // TODO: reserved block signal should check if train is stopping
-        case .occupied(let train, _):
+        case .occupied(let train):
             // Check the block direction
-            guard let signalBlockDirection = snapshot.blockState(self.location)?.direction else { return .unexpectedState }
+            guard let signalBlockDirection = snapshot.blockDirection(block: self.location) else { return .unexpectedState }
             if signalBlockDirection != self.direction {
                 // Block is occupied in the opposite direction or unknown state
                 return .signalBlockOccupiedOppositeDirection
@@ -72,12 +72,13 @@ extension Signal {
             case .vacant:
                 return .signalBlockOccupiedIndicatedBlockVacant
             
-            case .reserved(let reservedTrain, let reservedDirection):
+            case .reserved(let reservedTrain):
                 if reservedTrain == train { return .signalBlockOccupiedIndicatedBlockVacant }
                 
                 // reserved for another route - check the direction
+                let reservedDirection = snapshot.blockDirection(block: nextBlock)
                 return reservedDirection == self.direction ? .indicatedBlockOccupiedSameDirection : .indicatedBlockOccupiedOppositeDirection
-            case .occupied:
+            case .occupied, .vacating:
                 // Direction is not relevant
                 return .indicatedBlockOccupiedSameDirection
             }
@@ -94,7 +95,9 @@ extension Signal {
         switch nextBlockState {
         case .vacant:
             return .signalBlockVacantIndicatedBlockVacant
-        case .reserved(_, let nextBlockDirection), .occupied(_, let nextBlockDirection):
+            
+        case .reserved, .occupied, .vacating:
+            let nextBlockDirection = snapshot.blockDirection(block: nextBlock)
             return nextBlockDirection == self.direction ? .indicatedBlockOccupiedSameDirection : .indicatedBlockOccupiedOppositeDirection
         }
     }

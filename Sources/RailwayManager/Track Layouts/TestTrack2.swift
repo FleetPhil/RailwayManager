@@ -79,6 +79,7 @@ class TestTrack2: Layout, @unchecked Sendable {
             Sensor(id: 7, location: .single(block("D"))),
             Sensor(id: 8, location: .end(block("A1"), 10), signals: [.forward : signal(6)]),
             Sensor(id: 9, location: .end(block("B1"), 10), signals: [.forward : signal(7)]),
+            Sensor(id: 10, location: .start(block("A2"), 10)),
         ]
         buildLayout()
     }

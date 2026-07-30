@@ -134,10 +134,10 @@ actor MQTTManager: Sendable {
         switch blockState {
         case .vacant:
             itemState = "vacant"
-        case .reserved(let train, _):
+        case .reserved(let train):
             itemState = "reserved"
             additionalInformation = "Train \(train)"
-        case .occupied(let train, _):
+        case .occupied(let train), .vacating(let train):
             itemState = "occupied"
             additionalInformation = {
                 switch trainState {
@@ -147,8 +147,8 @@ actor MQTTManager: Sendable {
                     return "Running (Train \(train))"
                 case .waiting:
                     return "Waiting (Train \(train))"
-                case .stoppingForResource(let resource, let sensor, _, _):
-                    return "Stopping at \(sensor.id) for \(resource) (Train \(train))"
+                case .stoppingForResource(let resource):
+                    return "Stopping for \(resource)"
                 case .stoppedForResource(let trackResource, _):
                     switch trackResource {
                     case .point(let point):

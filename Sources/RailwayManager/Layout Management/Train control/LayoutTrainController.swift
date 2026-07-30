@@ -3,7 +3,7 @@ import Foundation
 actor LayoutTrainController {
     private let dccSessionStore = DCCSessionStore()
     private(set) var trainStates: [ Train: TrainRuntimeState] = [:]
-    private var trainDirections: [Train: Direction] = [:]
+    private(set) var trainDirections: [Train: Direction] = [:]
 
     init() {
     }
@@ -42,7 +42,26 @@ actor LayoutTrainController {
         return state
     }
     
+    // Return which end of the train (front or rear) has set the sensor taking into account the moving direction
+    func trainSensorLocationForOrientation(train: Train, orientation: SensorEventOrientation) -> TrainSensor {
+        let direction = try! trainDirection(train)
+        if orientation == train.trainFrontSensorOrientation {           // Front sensor
+            if direction == .forward {
+                return .front
+            } else {
+                return .rear
+            }
+        } else {                // Rear sensor
+            if direction == .forward {
+                return .rear
+            } else {
+                return .front
+            }
+        }
+    }
+    
     func setTrainDirection(_ train: Train, direction: Direction) {
+        log.verbose("Train \(train) direction is \(direction)")
         trainDirections[train] = direction
     }
     
@@ -71,7 +90,10 @@ actor LayoutTrainController {
                       speed: TrainSpeed,
                       delay: TimeInterval = 0) async throws {
         
+        let direction = try trainDirection(train)
+
         if GlobalOptions.noCBUS {
+            log.verbose("Train \(train) speed is \(speed) \(direction)")
             return
         }
 
@@ -83,9 +105,8 @@ actor LayoutTrainController {
             // TODO: timeout this loop
         }
         
-        let direction = try trainDirection(train)
         try await train.setSpeed(speed, direction: direction, delay: delay, session: activeSession!)
-        
+        log.verbose("Train \(train) speed is \(speed) \(direction)")
     }
     
     func stopAllTrains() async throws {

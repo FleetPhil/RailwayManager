@@ -8,35 +8,18 @@
 import Foundation
 import SwiftGraph
 
-extension Layout {
-    func route(id: Int, fromBlock: Block, toSensor: Sensor, direction: Direction) throws -> Route {
-        let segments: [Segment] = [
-            Segment(name: "Route \(id)", fromBlock: fromBlock, toBlock: toSensor.block, direction: direction, items: [
-                .lockPathToBlock(toSensor.block),
-                .moveToSensor(toSensor.id, true)
-            ])
-        ]
-        
-        // Validate the path
-        if try path(fromBlock: fromBlock, toBlock: toSensor.block, direction: direction) == nil {
-            // No path for this route
-            log.error("No path for this route")
-            throw TrainError.invalidRoute(id)
-        }
-        
-        return Route(id: id, segments: segments)
-    }
-}
+
+// Create a route on the layout consisting of a single block -> block path
 
 // MARK: Graph and path functions
 extension Layout {
     // Return the Path between a pair of blocks (nil if no route)
-    func path(fromBlock: Block, toBlock: Block, direction: Direction) throws -> Path? {
+    func path(fromBlock: Block, toBlock: Block, direction: Direction) throws -> Path {
         let layoutGraph = direction == .forward ? forwardLayoutGraph : reverseLayoutGraph
         let blocks = layoutGraph.edgesToVertices(edges: layoutGraph.bfs(from: fromBlock.id, to: toBlock.id))
         
         // Check for no route
-        if blocks.isEmpty { return nil }
+        if blocks.isEmpty { throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)") }
         
         // If not empty the array must contain at least 2 blocks (from & to)
 
@@ -46,7 +29,7 @@ extension Layout {
             $0.toBlock.id == blocks[1] &&
             $0.direction == direction
         }) == nil {
-            return nil
+            if blocks.isEmpty { throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)") }
         }
         
         var pathItems: [PathItem] = []
@@ -73,7 +56,6 @@ extension Layout {
         }) {
             return PathItem(fromBlock: fromBlock,
                             toBlock: toBlock,
-                            direction: direction,
                             role: role,
                             pointSettings: blockRoute.pointSettings)
         } else {

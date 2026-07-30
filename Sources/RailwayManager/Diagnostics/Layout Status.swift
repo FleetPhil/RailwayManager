@@ -17,9 +17,13 @@ extension LayoutTrackStateService {
         
         for block in snapshot.allBlocks.sorted(by: { $0.id < $1.id }) {
             let blockState = snapshot.blockState(block)!
-//            if  blockState != .vacant ||  blockDirection != .undefined {
+            if  blockState != .vacant {
                 log.verbose("\(block): \(blockState)")
-//            }
+            }
+            
+            if let locks = snapshot.directionLocks(block) {
+                log.verbose("\(block) locks: \(locks.map({ $0.id }))")
+            }
         }
         
         let signalStates = snapshot.allSignals

@@ -18,8 +18,14 @@ struct Route: CustomStringConvertible, Sendable {
         log.info("Route \(id) created with \(segments.count) segments")
     }
         
-    var startBlock: Block {
-        return segments.first!.fromBlock
+    var startBlock: Block  {
+        get throws {
+            if let startBlock = segments.first?.path.pathItems.first?.fromBlock {
+                return startBlock
+            } else {
+                throw TrainError.noStartBlockForRoute(id)
+            }
+        }
     }
 
     nonisolated var description: String {
