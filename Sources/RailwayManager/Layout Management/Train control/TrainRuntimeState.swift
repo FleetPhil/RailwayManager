@@ -15,13 +15,14 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
     case stoppingForResource(TrackResource)         // Blocking Resource
     case stoppedForResource(TrackResource, PathItem)              // Waiting for track resource, PathItem
     case stoppingAtSensor(Sensor, Int)                         // Stopping on transition command after distance
+    case stoppingForTimer(Sensor, WaitTime)
     case stoppedAtSensor(Sensor)
     
     var isMoving: Bool {
         switch self {
         case .idle, .stoppedAtSensor, .stoppedForResource, .waiting:
             return false
-        case .running, .stoppingForResource, .stoppingAtSensor:
+        case .running, .stoppingForResource, .stoppingAtSensor, .stoppingForTimer:
             return true
         }
     }
@@ -40,6 +41,8 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
             "Stopped for resource \(trackResource), \(block)"
         case .stoppingAtSensor(let sensor, let distance):
             "Stopping at sensor \(sensor), \(distance)"
+        case .stoppingForTimer(let sensor, let timer):
+            "Stopping for timer \(timer) at \(sensor)"
         case .stoppedAtSensor(let sensor):
             "Stopped at sensor \(sensor)"
         }

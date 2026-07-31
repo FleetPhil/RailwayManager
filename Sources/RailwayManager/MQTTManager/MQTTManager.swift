@@ -162,6 +162,8 @@ actor MQTTManager: Sendable {
                     return "Stopped at sensor \(sensor.id) (Train \(train))"
                 case .none:
                     return "No train state??"
+                case .stoppingForTimer(let sensor, let timer):
+                    return "Stopping at sensor \(sensor.id) for timer \(timer) (Train \(train))"
                 }
             }()
         }

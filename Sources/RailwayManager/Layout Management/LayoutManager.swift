@@ -34,6 +34,9 @@ actor LayoutManager: Sendable {
     // DCC Item States
     private let keepAliveInterval: TimeInterval = 3.0
     
+    // Shutdown Delay
+    private let shutdownDelay: TimeInterval = 10
+    
     // MARK: Init
     init(layout: Layout) async throws {
         self.layout = layout
@@ -144,6 +147,10 @@ actor LayoutManager: Sendable {
                 break           // Ignore
             }
             
+            log.verbose("Layout shutting down in \(shutdownDelay)s")
+            
+            try await Task.sleep(for: .seconds(shutdownDelay))
+            
             Led.setState(.on, forColour: .blue)
             Led.setState(.off, forColour: .red)
             Led.setState(.off, forColour: .green)
@@ -192,7 +199,6 @@ actor LayoutManager: Sendable {
                 // Free any points associated with this block (and associated conflicting points)
                 for point in layout.points {
                     let associatedBlock = await trackStateService.associatedBlockForPoint(point)
-//                    Log.log.debug("Point \(point) has associated \(associatedBlock, default: "None")")
                     if let associatedBlock {
                         if associatedBlock == block {
                             await LayoutEventHub.shared.publish(.didFreeResource(.point(point)))
@@ -237,7 +243,7 @@ actor LayoutManager: Sendable {
             log.info("Train \(train) ended")
             
             routeOperators[train] = nil
-
+            
             if self.routeOperators.isEmpty {
                 log.info("No active route operators: setting dormant state")
                 try await setState(.dormant)

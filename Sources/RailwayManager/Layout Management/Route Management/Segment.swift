@@ -13,6 +13,15 @@ enum WaitTime: Sendable, Equatable {
     case halt
     case station
     case terminus
+    
+    var timeInterval: TimeInterval {
+        switch self {
+        case .fixed(let timeInterval):  return timeInterval
+        case .halt:                     return 5
+        case .station:                  return 10
+        case .terminus:                 return  20
+        }
+    }
 }
 
 // A segment is a runtime wrapper for a path indicating any runtime parameters

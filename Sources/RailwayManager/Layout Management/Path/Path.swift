@@ -14,16 +14,24 @@ struct Path: Equatable {
 }
 
 enum PathItemRole {
+    case only
     case first
     case last
     case intermediate
     
     var isFirst: Bool {
-        if case .first = self { return true } else { return false }
+        switch self {
+        case .only, .first:     return true
+        default:                return false
+        }
     }
     var isLast: Bool {
-        if case .last = self { return true } else { return false }
+        switch self {
+        case .only, .last:      return true
+        default:                return false
+        }
     }
+
 }
 
 struct PathItem: Equatable, CustomStringConvertible, Sendable {

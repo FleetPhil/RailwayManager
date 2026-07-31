@@ -36,7 +36,13 @@ extension Layout {
         var index: Int = 0
         
         while blocks.count > index + 1 {
-            let role: PathItemRole = index == 0 ? .first : index + 2 == blocks.count ? .last : .intermediate
+            var role: PathItemRole {
+                if blocks.count == 2 { return .only }       // Start and end only
+                if index == 0 { return .first }
+                if index + 2 == blocks.count { return .last }
+                return .intermediate
+            }
+            
             pathItems.append(try pathItemForTransition(fromBlock: block(blocks[index]),
                                                        toBlock: block(blocks[index+1]),
                                                        direction: direction,

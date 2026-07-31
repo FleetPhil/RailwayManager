@@ -190,11 +190,9 @@ actor RouteOperator {
                 && sensor.location.isStart {
                 
                 // Sensor is at the start of the next block in the path
-                if try await processOccupiedRouteBlock() == false {
-                    // No more after this one
-                    routeState = .ending
-                }
+                try await processOccupiedRouteBlock()
             }
+            
             if trainSensor == .rear
                 && sensor.block == pathItem.fromBlock
                 && sensor.location.isStart {
@@ -213,7 +211,30 @@ actor RouteOperator {
                         // We are in the last block of the route
                         try await setTrainSpeed(train, speed: .stop, state: .idle)
                         routeState = .ended
+                        
+                        if let waitTime = route.segments[currentItemIndex.segmentIndex].waitTime {
+                            try await Task.sleep(for: .seconds(waitTime.timeInterval))
+                        }
+                        
                         await LayoutEventHub.shared.publish(.didEndRoute(train))
+                        
+                    } else {
+                        switch try await trainController.trainState(train) {
+                        case .stoppingForTimer(let stopSensor, let timer):
+                            if sensor == stopSensor {
+                                try await setTrainSpeed(train, speed: .stop, state: .stoppedAtSensor(sensor))
+                                
+                                try await Task.sleep(for: .seconds(timer.timeInterval))
+                                
+                                log.verbose("Timer ends for \(train)")
+                                
+                                // Now move on starting with request for the next track resource
+                                lastCommandedTrainSpeed = .normal
+                                try await processNextPathItem()
+                            }
+                        default:
+                            break
+                        }
                     }
                 } else if sensor.block == pathItem.fromBlock {
                     // The front of the train is at the end of the from block
@@ -236,6 +257,8 @@ actor RouteOperator {
                         break
                     case .stoppedAtSensor(let sensor):
                         // Ignore, likely spurious
+                        break
+                    case .stoppingForTimer(let stopSensor, let timer):
                         break
                     }
                 }
@@ -275,33 +298,52 @@ actor RouteOperator {
     }
     
     // The train has occupied the toBlock on the current path item
-    private func processOccupiedRouteBlock() async throws -> Bool {
+    private func processOccupiedRouteBlock() async throws {
+        
+        // If this is the placeholder first item just execute the first command
+        if isFirstPathItem {
+            try await processNextPathItem()
+            return
+        }
         
         // Set the state on the vacating block
-        // Unless this is the first item in the path where there is no previous block
-        if isFirstPathItem == false  {
-            try await stateService.setStateForBlock(currentPathItem.fromBlock, newState: .vacating(train))
-            
-            // Slow down if there is no exit from this block or it's the last in the segment
-            if currentPathItem.toBlock.blockExit[routeDirection] == .noExit
-                || currentPathItem.role.isLast {
-                // The sensor is in a block with no exit in this direction so slow down
-                if lastCommandedTrainSpeed != .slow {
-                    log.debug("Setting slow speed as no exit in block \(currentPathItem.toBlock), \(routeDirection)")
-                    guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
-                        throw TrainError.applicationError(24)
-                    }
-                    try await setTrainSpeed(train, speed: .slow, state: .stoppingAtSensor(endSensor, 0))
+        try await stateService.setStateForBlock(currentPathItem.fromBlock, newState: .vacating(train))
+        
+        // If this is the last item in the segment check the wait time
+        if currentPathItem.role.isLast {
+            if let waitTime = route.segments[currentItemIndex.segmentIndex].waitTime {
+                // Slow down
+                log.debug("Setting slow speed for wait in block \(currentPathItem.toBlock), \(routeDirection)")
+                guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
+                    throw TrainError.applicationError(24)
                 }
+                try await setTrainSpeed(train, speed: .slow, state: .stoppingForTimer(endSensor, waitTime))
+
+                // No more processing for now
+                return
             }
         }
         
+        try await processNextPathItem()
+        
+        if routeState == .ending {
+            // Slow down for the end sensor
+            log.debug("Setting slow speed for end in block \(currentPathItem.toBlock), \(routeDirection)")
+            guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
+                throw TrainError.applicationError(25)
+            }
+            try await setTrainSpeed(train, speed: .slow, state: .stoppingAtSensor(endSensor, 0))
+        }
+    }
+        
+     
+    private func processNextPathItem() async throws  {
         // Move to the next path item
         if let nextIndex = nextPathItemIndex() {
             currentItemIndex = nextIndex
         } else {
-            
-           return false     // No more
+            routeState = .ending
+            return      // No more
         }
 
         // Allocate resources to the next block
@@ -320,8 +362,6 @@ actor RouteOperator {
                 }
             }
         }
-        
-        return true
     }
     
     private func nextPathItemIndex() -> CurrentItemIndex? {
@@ -331,7 +371,8 @@ actor RouteOperator {
         if newIndex.pathItemIndex == route.segments[currentItemIndex.segmentIndex].path.pathItems.count {
             // Reached the end of the path items for this segment
             newIndex.segmentIndex += 1
-            if newIndex.pathItemIndex == route.segments[currentItemIndex.segmentIndex].path.pathItems.count {
+            newIndex.pathItemIndex = 0
+            if newIndex.segmentIndex == route.segments.count {
                 // No more segments
                 return nil
             }
