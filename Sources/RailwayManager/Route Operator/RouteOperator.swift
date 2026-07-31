@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  RouteOperator.swift
 //  
 //
 //  Created by Phil Diggens on 20/10/2024.
@@ -108,13 +108,26 @@ actor RouteOperator {
         currentItemIndex = CurrentItemIndex(segmentIndex: 0, pathItemIndex: 0)
     }
     
+    // MARK: - Current position accessors
+    
+    private var currentSegment: Segment {
+        route.segments[currentItemIndex.segmentIndex]
+    }
+    
+    private var currentWaitTime: WaitTime? {
+        currentSegment.waitTime
+    }
+    
     var currentPathItem: PathItem {
-        route.segments[currentItemIndex.segmentIndex].path.pathItems[currentItemIndex.pathItemIndex]
+        // Clamp the placeholder start index (-1) to the first item
+        currentSegment.path.pathItems[max(currentItemIndex.pathItemIndex, 0)]
     }
     
     var isFirstPathItem: Bool {
         return currentItemIndex.pathItemIndex == -1
     }
+    
+    // MARK: - Route lifecycle
     
     func runRoute() async throws {
         guard validForStart(route: route) else {
@@ -137,6 +150,8 @@ actor RouteOperator {
         log.info("\(rd): \(route): reset complete")
     }
     
+    // MARK: - Train commands
+    
     // Command a change to the train speed and update the status
     func setTrainSpeed(_ train: Train, speed: TrainSpeed, delay: TimeInterval = 0, state: TrainRuntimeState?) async throws {
         try await trainController.commandTrain(train, speed: speed, delay: delay)
@@ -149,28 +164,26 @@ actor RouteOperator {
         }
     }
     
+    // Stop the train, optionally updating the runtime state
+    private func stopTrain(state: TrainRuntimeState?) async throws {
+        try await setTrainSpeed(train, speed: .stop, state: state)
+    }
+    
+    // MARK: - Event processing
+    
     // Process the track event and execute route commands if able based on the layout state
-    // Exit with updated layout state or nil if no change or nothing processed
     func processEvent(_ event: LayoutEvent) async throws {
-
-        // Get the current path item
-        let pathItem = route
-            .segments[currentItemIndex.segmentIndex]
-            .path
-            .pathItems[currentItemIndex.pathItemIndex == -1 ? 0 : currentItemIndex.pathItemIndex]
+        log.verbose("Process event: \(event), pathItem: \(currentPathItem)")
         
-        log.verbose("Process event: \(event), pathItem: \(pathItem)")
-        
-        // Check for general cases
         switch (routeState, event) {
         case (.dormant, .didStartRoute(let startedTrain)), (.ended, .didStartRoute(let startedTrain)):
             if startedTrain == self.train {
                 log.info("\(rd): Starting route for train \(train.id) (\(train.name))")
                 
                 // Start the train moving and trigger processing for this block being occupied
-                try await setTrainSpeed(train, speed: .normal, state: .running(pathItem))
-                
-                let _ = try await processOccupiedRouteBlock()
+                try await setTrainSpeed(train, speed: .normal, state: .running(currentPathItem))
+                routeState = .active
+                try await processOccupiedRouteBlock()
             }
             
         case (.ended, .didEndRoute(let endedTrain)):
@@ -179,93 +192,8 @@ actor RouteOperator {
                 routeState = .ended
             }
             
-        // Sensor set: check if this is the start sensor in the next block for this route
         case (_, .didSetSensor(let sensorID, let orientation)):
-            let trainSensor =
-                await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
-            guard let sensor = layout.sensor(sensorID) else { throw TrainError.invalidSensor(sensorID) }
-            
-            if trainSensor == .front
-                && sensor.block == pathItem.toBlock
-                && sensor.location.isStart {
-                
-                // Sensor is at the start of the next block in the path
-                try await processOccupiedRouteBlock()
-            }
-            
-            if trainSensor == .rear
-                && sensor.block == pathItem.fromBlock
-                && sensor.location.isStart {
-                
-                // Sensor is at the start of the from block in the surrent path
-                // So train is clear of the previous block and any turnouts etc
-                try await processVacatedBlock(train: train)
-            }
-            
-            if trainSensor == .front
-                && sensor.location.isEnd {
-                if sensor.block == pathItem.toBlock {
-                    // Sensor is at the end of the to block in the path
-                    // Check if we should stop (only if this is the end of the route)
-                    if routeState == .ending {
-                        // We are in the last block of the route
-                        try await setTrainSpeed(train, speed: .stop, state: .idle)
-                        routeState = .ended
-                        
-                        if let waitTime = route.segments[currentItemIndex.segmentIndex].waitTime {
-                            try await Task.sleep(for: .seconds(waitTime.timeInterval))
-                        }
-                        
-                        await LayoutEventHub.shared.publish(.didEndRoute(train))
-                        
-                    } else {
-                        switch try await trainController.trainState(train) {
-                        case .stoppingForTimer(let stopSensor, let timer):
-                            if sensor == stopSensor {
-                                try await setTrainSpeed(train, speed: .stop, state: .stoppedAtSensor(sensor))
-                                
-                                try await Task.sleep(for: .seconds(timer.timeInterval))
-                                
-                                log.verbose("Timer ends for \(train)")
-                                
-                                // Now move on starting with request for the next track resource
-                                lastCommandedTrainSpeed = .normal
-                                try await processNextPathItem()
-                            }
-                        default:
-                            break
-                        }
-                    }
-                } else if sensor.block == pathItem.fromBlock {
-                    // The front of the train is at the end of the from block
-                    // Check if we should stop
-                    switch try await trainController.trainState(train) {
-                    case .idle:                     break
-                    case .running(let pathItem):    break
-                    case .waiting:                  break
-                    case .stoppingForResource(let trackResource):
-                        // Stop and wait
-                        try await setTrainSpeed(train, speed: .stop, state: .stoppedForResource(trackResource, currentPathItem))
-                        
-                    case .stoppedForResource(let trackResource, let pathItem):
-                        // Should not happen - likely spurious
-                        break
-                    case .stoppingAtSensor(let stopSensor, let int):
-                        if sensor == stopSensor {
-                            try await setTrainSpeed(train, speed: .stop, state: .stoppedAtSensor(sensor))
-                        }
-                        break
-                    case .stoppedAtSensor(let sensor):
-                        // Ignore, likely spurious
-                        break
-                    case .stoppingForTimer(let stopSensor, let timer):
-                        break
-                    }
-                }
-            }
-            
-            // End of sensor processing
-            // Not a sensor we are interested in
+            try await handleSensorSet(sensorID, orientation: orientation)
             
         case (_, .didEndTimer(let timerRoute)):
             if timerRoute == route.id {
@@ -273,29 +201,107 @@ actor RouteOperator {
             }
             
         case (_, .didFreeResource(let trackResource)):
-            let trainState = try await trainController.trainState(train)
-            switch trainState {
-            case .stoppingForResource(let freedResource), .stoppedForResource(let freedResource, _):
-                if freedResource == trackResource {
-                    log.verbose("\(rd): Have expected resource \(freedResource)")
-                    
-                    routeState = try await requestPathItem(currentPathItem)
-                }
-
-            default:
-                break
-            }
+            try await handleFreedResource(trackResource)
                         
         default:
             break                // Do nothing (unchanged state)
         }
+   
+    }
     
-        if routeState == .ended {
-            await LayoutEventHub.shared.publish(.didEndRoute(train))
+    // MARK: - Sensor event handling
+    
+    // Dispatch a sensor event based on which end of the train tripped it and where it sits on the current path
+    private func handleSensorSet(_ sensorID: Int, orientation: SensorEventOrientation) async throws {
+        let pathItem = currentPathItem
+        let trainSensor =
+            await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
+        guard let sensor = layout.sensor(sensorID) else { throw TrainError.invalidSensor(sensorID) }
+        
+        if trainSensor == .front
+            && sensor.block == pathItem.toBlock
+            && sensor.location.isStart {
+            
+            // Sensor is at the start of the next block in the path
+            try await processOccupiedRouteBlock()
         }
         
-//        print("*** \(rd): End event: \(event), \(routeState)")
+        if trainSensor == .rear
+            && sensor.block == pathItem.fromBlock
+            && sensor.location.isStart {
+            
+            // Sensor is at the start of the from block in the surrent path
+            // So train is clear of the previous block and any turnouts etc
+            try await processVacatedBlock(train: train)
+        }
+        
+        if trainSensor == .front
+            && sensor.location.isEnd {
+            try await handleFrontAtBlockEnd(sensor, pathItem: pathItem)
+        }
     }
+    
+    // The front of the train has reached an end-of-block sensor
+    private func handleFrontAtBlockEnd(_ sensor: Sensor, pathItem: PathItem) async throws {
+        if sensor.block == pathItem.toBlock {
+            // Sensor is at the end of the to block in the path
+            // Check if we should stop (only if this is the end of the route)
+            if routeState == .ending {
+                // We are in the last block of the route
+                try await stopTrain(state: .idle)
+                routeState = .ended
+                
+                if let waitTime = currentWaitTime {
+                    try await Task.sleep(for: .seconds(waitTime.timeInterval))
+                }
+                
+                await LayoutEventHub.shared.publish(.didEndRoute(train))
+                
+            } else if case .stoppingForTimer(let stopSensor, let timer) = try await trainController.trainState(train),
+                      sensor == stopSensor {
+                try await stopTrain(state: .stoppedAtSensor(sensor))
+                
+                try await Task.sleep(for: .seconds(timer.timeInterval))
+                
+                log.verbose("Timer ends for \(train)")
+                
+                // Now move on starting with request for the next track resource
+                lastCommandedTrainSpeed = .normal
+                try await processNextPathItem()
+            }
+        } else if sensor.block == pathItem.fromBlock {
+            // The front of the train is at the end of the from block
+            // Check if we should stop
+            switch try await trainController.trainState(train) {
+            case .stoppingForResource(let trackResource):
+                // Stop and wait
+                try await stopTrain(state: .stoppedForResource(trackResource, currentPathItem))
+                
+            case .stoppingAtSensor(let stopSensor, _) where sensor == stopSensor:
+                try await stopTrain(state: .stoppedAtSensor(sensor))
+                
+            default:
+                break       // Other states are no-ops or likely spurious
+            }
+        }
+    }
+    
+    // A track resource has been freed: resume if it is the one we are waiting for
+    private func handleFreedResource(_ trackResource: TrackResource) async throws {
+        switch try await trainController.trainState(train) {
+        case .stoppingForResource(let freedResource), .stoppedForResource(let freedResource, _):
+            if freedResource == trackResource {
+                log.verbose("\(rd): Have expected resource \(freedResource)")
+                
+                routeState = try await requestPathItem(currentPathItem)
+            }
+
+        default:
+            break
+        }
+    }
+    
+    // MARK: - Path item processing
     
     // The train has occupied the toBlock on the current path item
     private func processOccupiedRouteBlock() async throws {
@@ -310,32 +316,30 @@ actor RouteOperator {
         try await stateService.setStateForBlock(currentPathItem.fromBlock, newState: .vacating(train))
         
         // If this is the last item in the segment check the wait time
-        if currentPathItem.role.isLast {
-            if let waitTime = route.segments[currentItemIndex.segmentIndex].waitTime {
-                // Slow down
-                log.debug("Setting slow speed for wait in block \(currentPathItem.toBlock), \(routeDirection)")
-                guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
-                    throw TrainError.applicationError(24)
-                }
-                try await setTrainSpeed(train, speed: .slow, state: .stoppingForTimer(endSensor, waitTime))
-
-                // No more processing for now
-                return
-            }
+        if currentPathItem.role.isLast, let waitTime = currentWaitTime {
+            // Slow down for the wait
+            try await slowForEndSensor(errorCode: 24) { .stoppingForTimer($0, waitTime) }
+            
+            // No more processing for now
+            return
         }
         
         try await processNextPathItem()
         
         if routeState == .ending {
             // Slow down for the end sensor
-            log.debug("Setting slow speed for end in block \(currentPathItem.toBlock), \(routeDirection)")
-            guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
-                throw TrainError.applicationError(25)
-            }
-            try await setTrainSpeed(train, speed: .slow, state: .stoppingAtSensor(endSensor, 0))
+            try await slowForEndSensor(errorCode: 25) { .stoppingAtSensor($0, 0) }
         }
     }
-        
+    
+    // Slow the train for the end sensor of the current toBlock, moving to the given state
+    private func slowForEndSensor(errorCode: Int, state: (Sensor) -> TrainRuntimeState) async throws {
+        log.debug("Setting slow speed in block \(currentPathItem.toBlock), \(routeDirection)")
+        guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
+            throw TrainError.applicationError(errorCode)
+        }
+        try await setTrainSpeed(train, speed: .slow, state: state(endSensor))
+    }
      
     private func processNextPathItem() async throws  {
         // Move to the next path item
@@ -347,28 +351,49 @@ actor RouteOperator {
         }
 
         // Allocate resources to the next block
-        if let blockingResource = try await stateService.reservePathItem(currentPathItem, forTrain: train) {
+        if let blockingResource = try await reserveOrRun(currentPathItem, resumeSpeed: lastCommandedTrainSpeed) {
             await trainController.setTrainState(train, state: .stoppingForResource(blockingResource))
         } else {
-            // No blocking resource - just carry on
-            // Power the route
-            try await setTrainSpeed(train, speed: lastCommandedTrainSpeed, state: .running(currentPathItem))
-            
             // Set the points on this path without default values
-            for setting in currentPathItem.pointSettings {
-                if setting.point.defaultPosition == nil {
-                    // Don't override default positions e.g. on virtual back/back points
-                    try await stateService.setDirectionForPoint(setting.point, newDirection: setting.direction)
-                }
+            for setting in currentPathItem.pointSettings where setting.point.defaultPosition == nil {
+                // Don't override default positions e.g. on virtual back/back points
+                try await stateService.setDirectionForPoint(setting.point, newDirection: setting.direction)
             }
         }
+    }
+    
+    private func requestPathItem(_ item: PathItem) async throws -> RouteState {
+        if let blockingResource = try await reserveOrRun(item, resumeSpeed: .normal) {
+            // Stop the train and wait for the resource to be freed
+            try await stopTrain(state: .stoppedForResource(blockingResource, item))
+        }
+        
+        // Update the state to reflect the new item
+        try await stateService.setStateForBlock(
+            item.fromBlock,
+            newState : .occupied(train))
+        
+        return .active
+    }
+    
+    // Try to reserve the path item, returning the blocking resource if the reservation failed.
+    // Otherwise power the route at the given speed and return nil
+    private func reserveOrRun(_ item: PathItem, resumeSpeed: TrainSpeed) async throws -> TrackResource? {
+        if let blockingResource = try await stateService.reservePathItem(item, forTrain: train) {
+            return blockingResource
+        }
+        
+        // No blocking resource - just carry on
+        // Power the route
+        try await setTrainSpeed(train, speed: resumeSpeed, state: .running(item))
+        return nil
     }
     
     private func nextPathItemIndex() -> CurrentItemIndex? {
         var newIndex = CurrentItemIndex(
             segmentIndex: currentItemIndex.segmentIndex, pathItemIndex: currentItemIndex.pathItemIndex)
         newIndex.pathItemIndex += 1
-        if newIndex.pathItemIndex == route.segments[currentItemIndex.segmentIndex].path.pathItems.count {
+        if newIndex.pathItemIndex == currentSegment.path.pathItems.count {
             // Reached the end of the path items for this segment
             newIndex.segmentIndex += 1
             newIndex.pathItemIndex = 0
@@ -388,39 +413,6 @@ actor RouteOperator {
         }
     }
         
-    // TODO: this should be able to fail if already locked
-    // Lock the path
-    private func lockPathForItem(_ pathItem: PathItem, direction: Direction) async throws -> Bool {
-        try await stateService.setDirectionForVacantContiguousBlocks(fromBlock: pathItem.fromBlock,
-                                                                 train: train,
-                                                                 direction: direction)
-        return true
-    }
-    
-    private func requestPathItem(_ item: PathItem) async throws -> RouteState {
-        if let blockingResource = try await stateService.reservePathItem(item, forTrain: train) {
-            // Stop the train
-            try await setTrainSpeed(train, speed: .stop, state: .stoppedForResource(blockingResource, item))
-            try await stateService.setStateForBlock(
-                item.fromBlock,
-                newState : .occupied(train))
-            
-            return .active
-            
-        } else {
-            // No blocking resource - just carry on
-            // Power the route
-            try await setTrainSpeed(train, speed: .normal, state: .running(item))
-            
-            // Update the state to reflect the new item
-            try await stateService.setStateForBlock(
-                item.fromBlock,
-                newState : .occupied(train))
-                        
-            return .active
-        }
-    }
-    
     private func validForStart(route: Route) -> Bool {
         switch routeState {
         case .dormant:
@@ -447,4 +439,3 @@ extension TimeInterval {
     }
 
 }
-
