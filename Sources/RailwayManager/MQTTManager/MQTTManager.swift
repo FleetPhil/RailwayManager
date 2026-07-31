@@ -40,9 +40,12 @@ actor MQTTManager: Sendable {
     private let layoutTopic = "/topology"
 
     private init() {
+        // Broker location can be overridden without rebuilding via environment variables
+        let host = ProcessInfo.processInfo.environment["MQTT_HOST"] ?? "192.168.86.56"
+        let port = ProcessInfo.processInfo.environment["MQTT_PORT"].flatMap(Int.init) ?? 1883
         client = MQTTClient(
-            host: "192.168.86.56",
-            port: 1883,
+            host: host,
+            port: port,
             identifier: "ModelRailway",
             eventLoopGroupProvider: .shared(MultiThreadedEventLoopGroup.singleton)
         )

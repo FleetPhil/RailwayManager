@@ -13,6 +13,7 @@ enum CBUSError: Error, Equatable {
     case UnrecognisedOpCode(String)
     case NotCBUSMessage(String)
     case DecodeFailed(String)
+    case MissingField(String)
 }
 
 
@@ -21,7 +22,8 @@ actor CBUSManager: Sendable {
     // Singleton
     static let shared = CBUSManager()
     
-    private let serialPortName: String = "/dev/cu.usbmodem101"
+    // Serial port can be overridden without rebuilding via an environment variable
+    private let serialPortName: String = ProcessInfo.processInfo.environment["CBUS_SERIAL_PORT"] ?? "/dev/cu.usbmodem101"
     private let serialPort: SerialPort
     
     private var sessionMap: [ Int : Int] = [:]        // Address : Session
@@ -83,8 +85,9 @@ actor CBUSManager: Sendable {
         }
     }
     
+    // Track-wide DCC emergency stop (CBUS RSTOP/RESTP)
     func stopAllTrains() throws {
-        // TODO: Fix this for DCC
+        try sendCBUSMessage(CBUSMessage(opCode: .STOP))
     }
     
     func setFunction(_ function: Int, session: Int, on: Bool) throws {
@@ -129,14 +132,21 @@ extension CBUSManager {
     func sendCBUSMessage(_ message: CBUSMessage) throws {
         let cbusHeader = ":S6FC0N"
 
-        var dataToSend: [UInt8] = {
+        var dataToSend: [UInt8] = try {
             
             var data = cbusHeader + String(format: "%02X", message.opCode.rawValue)
             
             switch message.opCode {
             case .ASON, .ASON1, .ASON2, .ASOF, .ASOF1, .ASOF2:
+                guard let device = message.device else {
+                    throw CBUSError.MissingField("device for \(message.opCode)")
+                }
+                guard message.dataBytes.count >= message.opCode.dataByteCount - 1 else {
+                    throw CBUSError.MissingField("data bytes for \(message.opCode)")
+                }
+                
                 // Convert the node and device ID into 4 hex bytes
-                data += String(format: "%08X", message.device!)
+                data += String(format: "%08X", device)
                 
                 // Add the correct number of data bytes for the OpCode
                 if message.opCode.dataByteCount > 1 { data += String(format: "%02x", message.dataBytes[0]) }
@@ -144,29 +154,30 @@ extension CBUSManager {
                 if message.opCode.dataByteCount > 3 { data += String(format: "%02x", message.dataBytes[2]) }
                 return (data + ";").asciiValues
                 
-            case .DKEEP:
-                return (data + String(format: "%02X", message.session!) + ";").asciiValues
+            case .DKEEP, .KLOC:
+                guard let session = message.session else {
+                    throw CBUSError.MissingField("session for \(message.opCode)")
+                }
+                return (data + String(format: "%02X", session) + ";").asciiValues
                 
             case .RLOC:
-                return (data + String(format: "%04X", message.address!) + ";").asciiValues
+                guard let address = message.address else {
+                    throw CBUSError.MissingField("address for \(message.opCode)")
+                }
+                return (data + String(format: "%04X", address) + ";").asciiValues
 
-            case .KLOC:
-                return (data + String(format: "%02X", message.session!) + ";").asciiValues
-
-            case .DSPD:
-                return (data + String(format: "%02X", message.session!)
-                        + String(format: "%02X", message.dataBytes[0]) + ";").asciiValues
-                
-            case .STMOD:
-                return (data + String(format: "%02X", message.session!)
-                        + String(format: "%02X", message.dataBytes[0]) + ";").asciiValues
+            case .DSPD, .STMOD, .DFNON, .DFNOF:
+                guard let session = message.session else {
+                    throw CBUSError.MissingField("session for \(message.opCode)")
+                }
+                guard let dataByte = message.dataBytes.first else {
+                    throw CBUSError.MissingField("data byte for \(message.opCode)")
+                }
+                return (data + String(format: "%02X", session)
+                        + String(format: "%02X", dataByte) + ";").asciiValues
                 
             case .STOP:     // Emergency stop
                 return (data + ";").asciiValues
-                
-            case .DFNON, .DFNOF:
-                return (data + String(format: "%02X", message.session!)
-                        + String(format: "%02X", message.dataBytes[0]) + ";").asciiValues
                 
             case .ARST:
                 return (data + ";").asciiValues
@@ -206,10 +217,15 @@ extension CBUSManager {
                 var data: [UInt8] = []
                 for await byte in readStream {
                     if byte == 0x3B {           // Semicolon
-                        if let cbusMessage = try receivedCBUSMessage(data) {
-                            if let event = processReceivedMessage(cbusMessage) {
-                                continuation.yield(event)
+                        // A bad frame must not end the event stream: log it and continue
+                        do {
+                            if let cbusMessage = try receivedCBUSMessage(data) {
+                                if let event = processReceivedMessage(cbusMessage) {
+                                    continuation.yield(event)
+                                }
                             }
+                        } catch {
+                            log.warning("Ignored invalid CBUS frame: \(error)")
                         }
                         data.removeAll()
                     } else {
@@ -235,8 +251,13 @@ extension CBUSManager {
             .map({ String($0.first!) + String($0.last!) })  // Convert to array of 2 char strings
             .compactMap({ UInt8($0, radix: 16) })           // Map to numbers
 
-        if OpCode(rawValue: message[0]) == nil {
-            throw CBUSError.UnrecognisedOpCode(String(format: "%02X", message[0]))
+        // compactMap drops non-hex pairs, so the message may be shorter than the raw data
+        guard let opCodeByte = message.first else {
+            throw CBUSError.NotCBUSMessage("No opcode in frame")
+        }
+
+        if OpCode(rawValue: opCodeByte) == nil {
+            throw CBUSError.UnrecognisedOpCode(String(format: "%02X", opCodeByte))
         }
         
         return message
@@ -245,20 +266,33 @@ extension CBUSManager {
     // Process a received CBUS message and return a layout event if it triggers one, nil if not
     private func processReceivedMessage(_ message: [UInt8]) -> LayoutEvent? {
         
+        // Validate the message has the fields required for its opcode before indexing:
+        // a short frame from a corrupt read must not crash the controller
+        func hasBytes(_ count: Int) -> Bool {
+            if message.count < count {
+                log.warning("Ignored short CBUS message for opcode \(String(format: "%02X", message[0])): \(message.count) bytes")
+                return false
+            }
+            return true
+        }
+        
         switch OpCode(rawValue: message[0]) {
         case .ASON1:
+            guard hasBytes(6) else { return nil }
             let deviceID = Int(message[3]) * 256 + Int(message[4])
             let orientation: SensorEventOrientation = message[5] == 1 ? .north : .south
             
              return .didSetSensor(deviceID, orientation)
             
         case .ASOF1:
+            guard hasBytes(6) else { return nil }
             let deviceID = Int(message[3]) * 256 + Int(message[4])
             let orientation: SensorEventOrientation = message[5] == 1 ? .north : .south
             
             return .didUnsetSensor(deviceID, orientation)
             
         case .PLOC:
+            guard hasBytes(4) else { return nil }
             // Add to session map
             let session = Int(message[1])
             let address = Int(message[3])
@@ -272,6 +306,7 @@ extension CBUSManager {
             return nil
             
         case .ERR:
+            guard hasBytes(4) else { return nil }
             print("*** Received CBUS error \(message[3]) for address \(String(format: "%02X", message[2]))")
             return nil
             
@@ -279,6 +314,7 @@ extension CBUSManager {
             return nil
             
         case .STAT:
+            guard hasBytes(4) else { return nil }
             let flags = message[3]
             var statStrings: [String?] = []
             statStrings.append((flags & 0x80 != 0x00) ? "Hardware Error" : nil)
@@ -288,7 +324,7 @@ extension CBUSManager {
             statStrings.append((flags & 0x08 != 0x00) ? "EM stop all" : nil)
             statStrings.append((flags & 0x04 != 0x00) ? "Reset performed" : nil)
             statStrings.append((flags & 0x02 != 0x00) ? "Service mode on" : "Service mode off")
-            let statString = statStrings.compactMap({ $0 ?? "" + "," })
+            let statString = statStrings.compactMap({ $0 }).joined(separator: ", ")
             
             print("*** Received stats: \(statString)")
             return nil

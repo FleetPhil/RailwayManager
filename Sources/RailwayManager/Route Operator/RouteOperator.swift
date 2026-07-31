@@ -39,7 +39,7 @@ enum RouteAction: CustomStringConvertible {
     var description: String {
         switch self {
         case .lockPath(let path):
-            "lock \(path.pathItems.first!.fromBlock)-\(path.pathItems.last!.toBlock), \(path.direction)"
+            "lock \(path.pathItems.first.map { "\($0.fromBlock)" } ?? "?")-\(path.pathItems.last.map { "\($0.toBlock)" } ?? "?"), \(path.direction)"
         case .waitForSensor(let sensor, let sensorAction):
             "wait for sensor \(sensor, default: "none"), \(sensorAction)"
         case .setDirection(let direction):
@@ -215,7 +215,7 @@ actor RouteOperator {
     private func handleSensorSet(_ sensorID: Int, orientation: SensorEventOrientation) async throws {
         let pathItem = currentPathItem
         let trainSensor =
-            await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
+            try await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
         guard let sensor = layout.sensor(sensorID) else { throw TrainError.invalidSensor(sensorID) }
         
         if trainSensor == .front

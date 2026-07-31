@@ -41,5 +41,6 @@ enum TrainError: Error, Equatable {
     case errorProcessingEvent(String)
     case CBUSUnreachable
     case MQTTConnectFail
+    case noDCCSession(Int)
 }
 

@@ -130,7 +130,8 @@ actor LayoutTrackStateService {
         case .vacant:
             if !oldState.isVacant {
                 blockStates[block] = newState
-                if let train = blockStates[block]?.train {
+                // Release the lock held by the train that was in the block
+                if let train = oldState.train {
                     try releaseDirectionLock(block: block, train: train)
                 }
                 await LayoutEventHub.shared.publish(.didFreeResource(.block(block)))
@@ -195,8 +196,9 @@ actor LayoutTrackStateService {
         
         
         
-        let trainState = newState.train == nil ? nil : try await trainController.trainState(newState.train!)
-        try await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: newState, trainState:trainState)
+        // Telemetry: a publish failure must not fail the state change
+        let trainState = newState.train == nil ? nil : try? await trainController.trainState(newState.train!)
+        try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: newState, trainState: trainState)
     }
     
     func releaseDirectionLock(block: Block, train: Train) throws {
@@ -240,7 +242,14 @@ actor LayoutTrackStateService {
     // Path Item is a block-block transition, maybe involving 1 or more points
     // This function is called when the next transition is required
     func reservePathItem(_ item: PathItem, forTrain: Train) async throws -> TrackResource? {
-        switch blockStates[item.toBlock] {
+        // Fetch the train directions before checking: the check-and-reserve section below must
+        // not suspend, otherwise a reentrant call could reserve the same resources for another train
+        let trainDirection = try await trainController.trainDirection(forTrain)
+        let trainDirections = await trainController.trainDirections
+        
+        // MARK: Critical section: no awaits until all resources are marked reserved
+        let oldState = blockStates[item.toBlock] ?? .vacant
+        switch oldState {
         case .vacant, .vacating:
             break
         case .occupied:
@@ -251,17 +260,15 @@ actor LayoutTrackStateService {
                 log.debug("Train \(forTrain) reserve fails: \(item) state is reserved for \(train)")
                 return .block(item.toBlock)
             }
-
-        case .none:
-            break
         }
         
         // Check any opposite direction locks on contiguous blocks
-        let trainDirection = try await trainController.trainDirection(forTrain)
         let contiguousBlocks = layout.contiguousBlocks(fromBlock: item.toBlock, direction: trainDirection)
         for contiguousBlock in contiguousBlocks {
-            if let locks = directionLocks[contiguousBlock] {
-                let lockedTrainDirection = try await trainController.trainDirection(locks.first!)
+            if let lockedTrain = directionLocks[contiguousBlock]?.first {
+                guard let lockedTrainDirection = trainDirections[lockedTrain] else {
+                    throw TrainError.noTrainDirection(lockedTrain.id)
+                }
                 if lockedTrainDirection != trainDirection {
                     // Block is locked in opposite direction
                     log.verbose("Reserve fails for locked block \(contiguousBlock), direction \(lockedTrainDirection)")
@@ -277,17 +284,37 @@ actor LayoutTrackStateService {
             return .point(reservedPoint.point)
         }
 
-        try await setStateForBlock(item.toBlock, newState: .reserved(forTrain))
-        try await setDirectionForVacantContiguousBlocks(fromBlock: item.toBlock, train: forTrain, direction: trainDirection)
+        // All checks passed: mark the block, direction locks and points reserved
+        log.verbose("Block \(item.toBlock) state request from \(oldState) to \(BlockRuntimeState.reserved(forTrain))")
+        if oldState.isVacant {
+            // Clear any existing lock on this block for this train
+            try releaseDirectionLock(block: item.toBlock, train: forTrain)
+        }
+        blockStates[item.toBlock] = .reserved(forTrain)
         
-        
-        for pointID in item.pointSettings.map( \.point ) {
-            try await setReservedTrainForPoint(pointID, to: forTrain, associatedStartBlock: item.fromBlock)
+        for vacantBlock in contiguousBlocks where blockStates[vacantBlock]?.isVacant ?? true {
+            if directionLocks[vacantBlock]?.contains(forTrain) == true {
+                throw TrainError.lockAlreadyExists(vacantBlock, forTrain)
+            }
+            // Lock directions were checked above, so the lock can be added directly
+            directionLocks[vacantBlock, default: []].append(forTrain)
         }
         
+        for point in item.pointSettings.map( \.point ) {
+            log.verbose("Point \(point) set to reserved \(forTrain)")
+            pointStates[point]?.reservedByTrain = forTrain
+            pointStates[point]?.freeWithBlock = item.fromBlock
+        }
+        // MARK: End critical section
+        
+        // Command the point hardware
         for pointSetting in item.pointSettings {
             try await pointSetting.point.setDirection(pointSetting.direction)
         }
+        
+        // Telemetry: a publish failure must not fail the reservation
+        let trainState = try? await trainController.trainState(forTrain)
+        try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain), trainState: trainState)
         
         return nil
     }
@@ -346,14 +373,16 @@ actor LayoutTrackStateService {
         
         log.info("Point \(point.id) set to \(newDirection)")
         
-        var newState = pointStates[point]!
+        guard var newState = pointStates[point] else {
+            throw TrainError.unexpectedTrackState("No state for point \(point.id)")
+        }
         newState.direction = newDirection
         pointStates[point] = newState
         
         try await point.setDirection(newDirection)
 
-        // Send to MQTT
-        try await MQTTManager.shared.sendPointState(point: point, state: newDirection)
+        // Telemetry: a publish failure must not fail the state change
+        try? await MQTTManager.shared.sendPointState(point: point, state: newDirection)
     }
     
     // Reset point to default condition or straight

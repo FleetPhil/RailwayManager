@@ -4,11 +4,13 @@
 import Foundation
 import SwiftyBeaver
 
-nonisolated(unsafe) var log = SwiftyBeaver.self
+let log = SwiftyBeaver.self
 
 struct GlobalOptions {
     static let noMQTT: Bool = true
     static let noCBUS: Bool = true
+    // Allow test commands (e.g. simulated sensor events) to be entered on stdin
+    static let consoleTestCommands: Bool = true
 }
 
 @main
@@ -65,7 +67,7 @@ struct CommandLineTool {
 
             // Start task to process test commands if on macOS
     #if os(OSX)
-            while true {
+            while GlobalOptions.consoleTestCommands {
                 if let input = readLine() {
                     if input.starts(with: "sn") {            // Sensor north
                         if let sensorID = Int(input.dropFirst(2)) {

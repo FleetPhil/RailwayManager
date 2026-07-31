@@ -6,3 +6,9 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# Credentials - never commit keys or certificates
+*.key
+*.pem
+*.crt
+*.p12

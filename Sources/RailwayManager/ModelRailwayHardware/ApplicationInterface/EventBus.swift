@@ -12,7 +12,8 @@ actor EventBus<Event: Sendable> {
     func subscribe() -> AsyncStream<Event> {
         let id = UUID()
 
-        return AsyncStream { continuation in
+        // Bounded buffer so a stalled subscriber cannot grow memory without limit
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1024)) { continuation in
             continuations[id] = continuation
             continuation.onTermination = { [weak self] _ in
                 Task {

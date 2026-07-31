@@ -43,8 +43,8 @@ actor LayoutTrainController {
     }
     
     // Return which end of the train (front or rear) has set the sensor taking into account the moving direction
-    func trainSensorLocationForOrientation(train: Train, orientation: SensorEventOrientation) -> TrainSensor {
-        let direction = try! trainDirection(train)
+    func trainSensorLocationForOrientation(train: Train, orientation: SensorEventOrientation) throws -> TrainSensor {
+        let direction = try trainDirection(train)
         if orientation == train.trainFrontSensorOrientation {           // Front sensor
             if direction == .forward {
                 return .front
@@ -97,23 +97,46 @@ actor LayoutTrainController {
             return
         }
 
+        // Wait for an active DCC session, but not forever: a command (especially a stop)
+        // must fail loudly rather than hang if the session never arrives
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         var activeSession = await dccSessionStore.session(for: train)
         while activeSession == nil {
+            guard ContinuousClock.now < deadline else {
+                throw TrainError.noDCCSession(train.id)
+            }
             try await Task.sleep(for: .milliseconds(200))
             activeSession = await dccSessionStore.session(for: train)
-            
-            // TODO: timeout this loop
+        }
+        guard let session = activeSession else {
+            throw TrainError.noDCCSession(train.id)
         }
         
-        try await train.setSpeed(speed, direction: direction, delay: delay, session: activeSession!)
+        try await train.setSpeed(speed, direction: direction, delay: delay, session: session)
         log.verbose("Train \(train) speed is \(speed) \(direction)")
     }
     
-    func stopAllTrains() async throws {
+    // Stop every active train, best effort: a failure for one train must not prevent
+    // stopping the others. Falls back to a track-wide emergency stop on any failure.
+    func stopAllTrains() async {
+        var stopFailed = false
         let activeTrains = await dccSessionStore.activeTrains()
         for activeTrain in activeTrains {
-            try await commandTrain(activeTrain, speed: .stop)
-            setTrainState(activeTrain, state: .idle)
+            do {
+                try await commandTrain(activeTrain, speed: .stop)
+                setTrainState(activeTrain, state: .idle)
+            } catch {
+                stopFailed = true
+                log.error("Failed to stop train \(activeTrain): \(error)")
+            }
+        }
+        
+        if stopFailed {
+            do {
+                try await CBUSManager.shared.stopAllTrains()
+            } catch {
+                log.error("CBUS emergency stop failed: \(error)")
+            }
         }
     }
 }

@@ -37,6 +37,9 @@ actor LayoutManager: Sendable {
     // Shutdown Delay
     private let shutdownDelay: TimeInterval = 10
     
+    // Pending delayed shutdown - cancelled if a route starts during the delay
+    private var shutdownTask: Task<Void, Never>? = nil
+    
     // MARK: Init
     init(layout: Layout) async throws {
         self.layout = layout
@@ -52,7 +55,8 @@ actor LayoutManager: Sendable {
                     try await self.processEvent(event)
                 } catch {
                     log.error("Failed to process event \(event): \(error)")
-                    layoutState = .error
+                    // Enter the error state via setState so trains are stopped and LEDs set
+                    try? await self.setState(.error)
                 }
             }
         })
@@ -62,11 +66,16 @@ actor LayoutManager: Sendable {
             while !Task.isCancelled {
                 do {
                     try await trackStateService.trainController.sendKeepAlives()
-                    try await Task.sleep(for: .seconds(self.keepAliveInterval))
                 } catch is CancellationError {
                     break
                 } catch {
                     log.error("Keep-alive error: \(error)")
+                }
+                // Always sleep, even after a failure, to avoid a tight retry loop
+                do {
+                    try await Task.sleep(for: .seconds(self.keepAliveInterval))
+                } catch {
+                    break       // Cancelled
                 }
             }
         })
@@ -149,20 +158,23 @@ actor LayoutManager: Sendable {
             
             log.verbose("Layout shutting down in \(shutdownDelay)s")
             
-            try await Task.sleep(for: .seconds(shutdownDelay))
-            
-            Led.setState(.on, forColour: .blue)
-            Led.setState(.off, forColour: .red)
-            Led.setState(.off, forColour: .green)
-
-            try await trackStateService.trainController.stopAllTrains()
-
-            for signal in layout.signals {
-                await trackStateService.setSignalState(signal, .off)
-                try await Task.sleep(for: .milliseconds(100))
+            // Schedule the shutdown: a route started during the delay cancels it
+            shutdownTask?.cancel()
+            shutdownTask = Task {
+                do {
+                    try await Task.sleep(for: .seconds(self.shutdownDelay))
+                } catch {
+                    return          // Cancelled: a new route started
+                }
+                await self.completeShutdown()
             }
+            return                  // State becomes dormant when the shutdown completes
             
         case .running:
+            // Cancel any pending shutdown
+            shutdownTask?.cancel()
+            shutdownTask = nil
+            
             if layoutState == .running {
                 log.error("State change to running ignored")
                 return
@@ -178,10 +190,31 @@ actor LayoutManager: Sendable {
             Led.setState(.off, forColour: .green)
             Led.setState(.off, forColour: .blue)
             Led.setState(.on, forColour: .red)
-            try await trackStateService.trainController.stopAllTrains()
+            await trackStateService.trainController.stopAllTrains()
         }
         
         self.layoutState = newState
+    }
+    
+    // Complete a delayed transition to dormant: stop everything and turn off the signals
+    private func completeShutdown() async {
+        // A route may have started, or an error occurred, while the shutdown was pending
+        guard !Task.isCancelled, layoutState != .error, layoutState != .dormant else { return }
+        
+        Led.setState(.on, forColour: .blue)
+        Led.setState(.off, forColour: .red)
+        Led.setState(.off, forColour: .green)
+
+        await trackStateService.trainController.stopAllTrains()
+
+        for signal in layout.signals {
+            await trackStateService.setSignalState(signal, .off)
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        
+        layoutState = .dormant
+        shutdownTask = nil
+        log.info("Layout is now dormant")
     }
     
     // MARK: Process track level events
@@ -226,7 +259,7 @@ actor LayoutManager: Sendable {
                 
             case 2:
                 // Stop all trains
-                try await trackStateService.trainController.stopAllTrains()
+                await trackStateService.trainController.stopAllTrains()
                 
             case 3:
                 // Report state
@@ -266,11 +299,10 @@ actor LayoutManager: Sendable {
     }
     
     private func updateSignals() async throws {
-        if layoutState != .dormant {
-            for changedSignal in try SignalCoordinator.refresh(snapshot: await trackStateService.snapshot()) {
-                await trackStateService.setSignalState(changedSignal.key, changedSignal.value)
-                try await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value)
-            }
+        for changedSignal in try SignalCoordinator.refresh(snapshot: await trackStateService.snapshot()) {
+            await trackStateService.setSignalState(changedSignal.key, changedSignal.value)
+            // Telemetry: a publish failure must not fail the signal update
+            try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value)
         }
     }
 }
