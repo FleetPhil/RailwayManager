@@ -37,7 +37,7 @@ actor LayoutTrainController {
     
     func trainDirection(_ train: Train) throws -> Direction {
         guard let state = trainDirections[train] else {
-            throw TrainError.applicationError(21)
+            throw TrainError.noTrainDirection(train.id)
         }
         return state
     }
@@ -71,7 +71,7 @@ actor LayoutTrainController {
     
     func trainState(_ train: Train) throws -> TrainRuntimeState {
         guard let state = trainStates[train] else {
-            throw TrainError.applicationError(20)
+            throw TrainError.applicationError("No runtime state for train \(train.id)")
         }
         return state
     }

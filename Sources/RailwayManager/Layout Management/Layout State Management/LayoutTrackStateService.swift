@@ -188,7 +188,7 @@ actor LayoutTrackStateService {
                 break
             case .occupied(let train), .vacating(let train):
                 if train != vacatingTrain {
-                    throw TrainError.applicationError(25)
+                    throw TrainError.invalidBlockStateChange("Train \(vacatingTrain) can't vacate \(block): in use by \(train)")
                 }
             }
             blockStates[block] = newState
@@ -230,7 +230,7 @@ actor LayoutTrackStateService {
                 if currentLockedDirection == trainDirection {
                     directionLocks[block]!.append(train)
                 } else {
-                    throw TrainError.applicationError(23)
+                    throw TrainError.applicationError("Can't lock block \(block) for train \(train): locked in opposite direction")
                 }
             }
         } else {
@@ -324,7 +324,7 @@ actor LayoutTrackStateService {
     }
 
     func processSensorSetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
-        guard let blockState = blockStates[sensor.block] else { throw TrainError.applicationError(10) }
+        guard let blockState = blockStates[sensor.block] else { throw TrainError.unexpectedTrackState("No state for block \(sensor.block)") }
         guard let train = blockState.train else { throw TrainError.noTrainForSetSensor(sensor.id) }
         let trainDirection = try await trainController.trainDirection(train) 
         

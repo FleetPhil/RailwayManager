@@ -65,7 +65,7 @@ extension Layout {
                             role: role,
                             pointSettings: blockRoute.pointSettings)
         } else {
-            throw TrainError.applicationError(7)      // Not found??
+            throw TrainError.invalidPath("No block route from \(fromBlock) to \(toBlock), \(direction)")
         }
     }
     

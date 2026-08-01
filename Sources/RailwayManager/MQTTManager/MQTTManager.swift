@@ -40,12 +40,10 @@ actor MQTTManager: Sendable {
     private let layoutTopic = "/topology"
 
     private init() {
-        // Broker location can be overridden without rebuilding via environment variables
-        let host = ProcessInfo.processInfo.environment["MQTT_HOST"] ?? "192.168.86.56"
-        let port = ProcessInfo.processInfo.environment["MQTT_PORT"].flatMap(Int.init) ?? 1883
+        // Broker location is set from the command line options (or their env/default values)
         client = MQTTClient(
-            host: host,
-            port: port,
+            host: GlobalOptions.mqttHost,
+            port: GlobalOptions.mqttPort,
             identifier: "ModelRailway",
             eventLoopGroupProvider: .shared(MultiThreadedEventLoopGroup.singleton)
         )
@@ -105,7 +103,7 @@ actor MQTTManager: Sendable {
             }
         } catch {
             handleJSONError(error)
-            throw TrainError.applicationError(17)
+            throw TrainError.applicationError("MQTT publish failed for signal state")
         }
     }
 
@@ -126,7 +124,7 @@ actor MQTTManager: Sendable {
         } catch {
             handleJSONError(error)
             try? await Task.sleep(for: .milliseconds(500))
-            throw TrainError.applicationError(18)
+            throw TrainError.applicationError("MQTT publish failed for point state")
         }
     }
 
@@ -188,7 +186,7 @@ actor MQTTManager: Sendable {
             }
         } catch {
             handleJSONError(error)
-            throw TrainError.applicationError(19)
+            throw TrainError.applicationError("MQTT publish failed for block state")
         }
     }
     

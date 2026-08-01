@@ -8,7 +8,7 @@
 import Foundation
 
 actor LayoutManager: Sendable {
-    private enum LayoutState {
+    enum LayoutState {
         case dormant
         case running
         case ending
@@ -25,7 +25,7 @@ actor LayoutManager: Sendable {
     private var backgroundTasks: [Task<Void, Never>] = []
 
     // Layout & state
-    private var layoutState: LayoutState = .dormant
+    private(set) var layoutState: LayoutState = .dormant
     private let trackStateService: LayoutTrackStateService
     
     // Signal coordinator
@@ -246,7 +246,7 @@ actor LayoutManager: Sendable {
             }
             
         case .didSetSensor(let sensorID, let sensorOrientation):
-            guard let sensor = layout.sensor(sensorID) else { throw TrainError.applicationError(9) }
+            guard let sensor = layout.sensor(sensorID) else { throw TrainError.invalidSensor(sensorID) }
 
             try await trackStateService.processSensorSetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
             
@@ -299,7 +299,12 @@ actor LayoutManager: Sendable {
     }
     
     private func updateSignals() async throws {
-        for changedSignal in try SignalCoordinator.refresh(snapshot: await trackStateService.snapshot()) {
+        let snapshot = await trackStateService.snapshot()
+        guard let signalStates = try SignalCoordinator.refresh(snapshot: snapshot, layoutState: layoutState) else {
+            // Layout not active
+            return
+        }
+        for changedSignal in signalStates {
             await trackStateService.setSignalState(changedSignal.key, changedSignal.value)
             // Telemetry: a publish failure must not fail the signal update
             try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value)

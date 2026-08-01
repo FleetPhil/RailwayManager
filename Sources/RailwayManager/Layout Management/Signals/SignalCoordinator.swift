@@ -2,7 +2,10 @@ import Foundation
 
 actor SignalCoordinator {
     // Refresh the signal state and return all changes
-    static func refresh(snapshot: LayoutTrackSnapshot) throws -> [ Signal : SignalState ] {
+    static func refresh(snapshot: LayoutTrackSnapshot, layoutState: LayoutManager.LayoutState) throws -> [ Signal : SignalState ]? {
+        // Ignore if layout is not active
+        if [LayoutManager.LayoutState.dormant, .error].contains(layoutState) { return nil }
+        
         // Set initial state on all signals
         var newState: [ Signal : SignalState] = [:]
         for signal in snapshot.allSignals {

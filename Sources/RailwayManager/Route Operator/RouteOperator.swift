@@ -318,7 +318,7 @@ actor RouteOperator {
         // If this is the last item in the segment check the wait time
         if currentPathItem.role.isLast, let waitTime = currentWaitTime {
             // Slow down for the wait
-            try await slowForEndSensor(errorCode: 24) { .stoppingForTimer($0, waitTime) }
+            try await slowForEndSensor { .stoppingForTimer($0, waitTime) }
             
             // No more processing for now
             return
@@ -328,15 +328,15 @@ actor RouteOperator {
         
         if routeState == .ending {
             // Slow down for the end sensor
-            try await slowForEndSensor(errorCode: 25) { .stoppingAtSensor($0, 0) }
+            try await slowForEndSensor { .stoppingAtSensor($0, 0) }
         }
     }
     
     // Slow the train for the end sensor of the current toBlock, moving to the given state
-    private func slowForEndSensor(errorCode: Int, state: (Sensor) -> TrainRuntimeState) async throws {
+    private func slowForEndSensor(state: (Sensor) -> TrainRuntimeState) async throws {
         log.debug("Setting slow speed in block \(currentPathItem.toBlock), \(routeDirection)")
         guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
-            throw TrainError.applicationError(errorCode)
+            throw TrainError.applicationError("No end sensor for block \(currentPathItem.toBlock), \(routeDirection)")
         }
         try await setTrainSpeed(train, speed: .slow, state: state(endSensor))
     }
