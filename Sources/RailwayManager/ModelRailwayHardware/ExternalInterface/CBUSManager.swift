@@ -8,12 +8,29 @@
 import Foundation
 @preconcurrency import SwiftSerial
 
-enum CBUSError: Error, Equatable {
+enum CBUSError: Error, Equatable, CustomStringConvertible {
     case CBUSUnreachable
     case UnrecognisedOpCode(String)
     case NotCBUSMessage(String)
     case DecodeFailed(String)
     case MissingField(String)
+    
+    var description: String {
+        switch self {
+        case .CBUSUnreachable:                  "CBUS Unreachable"
+        case .UnrecognisedOpCode(let string):   "Unrecognised CBUS OpCode: \(string)"
+        case .NotCBUSMessage(let string):       "Not CBUS message: \(string)"
+        case .DecodeFailed(let string):         "CBUS decode failed: \(string)"
+        case .MissingField(let string):         "Missing CBUS field: \(string)"
+        }
+    }
+    
+    var isFatal: Bool {
+        switch self {
+        case .CBUSUnreachable:      true
+        default:                    false
+        }
+    }
 }
 
 

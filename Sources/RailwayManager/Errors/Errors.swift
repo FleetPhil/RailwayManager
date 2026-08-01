@@ -23,5 +23,25 @@ enum TrainError: Error, Equatable {
     case noLockToRelease(Block, Train)
     case MQTTConnectFail
     case noDCCSession(Int)
+    
+    var isFatal: Bool {
+        switch self {
+        case .unexpectedTrackState:         true
+        case .invalidRoute:                 true
+        case .invalidSensor:                true
+        case .invalidPath:                  true
+        case .noStartBlockForRoute:         true
+        case .queueError:                   true
+        case .invalidBlockStateChange:      true
+        case .applicationError:             true
+        case .noTrainForSetSensor:          false
+        case .noCurrentBlockForTrainSensor: true
+        case .noTrainDirection:             true
+        case .lockAlreadyExists:            false
+        case .noLockToRelease:              true
+        case .MQTTConnectFail:              true
+        case .noDCCSession:                 true
+        }
+    }
 }
 

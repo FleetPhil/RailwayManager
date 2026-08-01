@@ -62,7 +62,20 @@ struct RailwayManager: ParsableCommand {
         Self.setupLog(minLevel: logLevel.swiftyBeaverLevel)
         
         Task {
-            await Self.runManager()
+            do {
+                let layoutManager = try await RailwayManager.createLayoutManager(layout: TestTrack2())
+                
+                await Self.runManager(layoutManager: layoutManager)
+            } catch let error as TrainError {
+                if error.isFatal {
+                    fatalError("*** Failed to initialise layout: \(error)")
+                } else {
+                    log.error(error)
+                }
+            } catch let error as CBUSError {
+                fatalError("*** Failed to initialise CBUS: \(error)")
+            }
+            
         }
         
         RunLoop.current.run()
@@ -77,7 +90,7 @@ struct RailwayManager: ParsableCommand {
         log.addDestination(console)
     }
     
-    static func runManager() async {
+    static func runManager(layoutManager: LayoutManager) async {
         log.info("Starting manager...")
         
 #if os(OSX)
@@ -87,7 +100,7 @@ struct RailwayManager: ParsableCommand {
 #endif
         
         do {
-            let layoutManager = try await setupRoutes()
+            try await setupRoutes(layoutManager: layoutManager)
             
             // Start task to process test commands if on macOS
             while GlobalOptions.consoleTestCommands {
@@ -95,19 +108,34 @@ struct RailwayManager: ParsableCommand {
                     try await processConsoleCommand(input, layoutManager)
                 }
             }
+        } catch let error as TrainError {
+            if error.isFatal {
+                fatalError("Fatal: \(error)")
+            } else {
+                log.error("Non-fatal: \(error)")
+            }
+        } catch let error as CBUSError {
+            if error.isFatal {
+                fatalError("Fatal CBUS Error: \(error)")
+            } else {
+                log.error("Non-fatal CBUS Error: \(error)")
+            }
         } catch {
-            log.info("Error encountered: \(error)")
+            log.error("Unexpected error: \(error)")
         }
         
         log.info("Manager setup finished.")
     }
     
-    static func setupRoutes() async throws -> LayoutManager {
-        let layout = TestTrack2()
-        log.info("Is valid: \(layout.layoutIsValid())")
+    static func createLayoutManager(layout: Layout) async throws -> LayoutManager {
+        log.info("Layout is valid: \(layout.layoutIsValid())")
         
-        let layoutManager = try await LayoutManager(layout: layout)
-        
+        return try await LayoutManager(layout: layout)
+    }
+    
+    static func setupRoutes(layoutManager: LayoutManager) async throws  {
+        let layout = layoutManager.layout
+
         let path1 = try layout.path(fromBlock: layout.block("D"),
                                     toBlock: layout.block("C"),
                                     direction: .forward)
@@ -130,8 +158,6 @@ struct RailwayManager: ParsableCommand {
         //
         //            let train2 = Train(trainParams: TrainParams(id: 2, name: "Train 2", address: 21, trainSpeeds: [:]))
         //            try await layoutManager.runRoute(route: route2, train: train2)
-        
-        return layoutManager
     }
     
     static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {
