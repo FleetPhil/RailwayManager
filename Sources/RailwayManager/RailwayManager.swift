@@ -62,24 +62,31 @@ struct RailwayManager: ParsableCommand {
         Self.setupLog(minLevel: logLevel.swiftyBeaverLevel)
         
         Task {
-            do {
-                let layoutManager = try await RailwayManager.createLayoutManager(layout: TestTrack2())
-                
-                await Self.runManager(layoutManager: layoutManager)
-            } catch let error as TrainError {
-                if error.isFatal {
+            await runLayout()
+        }
+        RunLoop.current.run()
+    }
+    
+    private func runLayout() async {
+        var layoutManager: LayoutManager {
+            get async {
+                do {
+                    let layout = Cellar()
+                    
+                    // Start MQTT
+                    try await MQTTManager.shared.connect()
+                    try await MQTTManager.shared.sendTopolology(fromLayout: layout)
+                    
+                    return try await RailwayManager.createLayoutManager(layout: layout)
+
+                } catch {
                     fatalError("*** Failed to initialise layout: \(error)")
-                } else {
-                    log.error(error)
                 }
-            } catch let error as CBUSError {
-                fatalError("*** Failed to initialise CBUS: \(error)")
             }
-            
         }
         
-        RunLoop.current.run()
-        
+        // Create and run the manager
+        await Self.runManager(layoutManager: layoutManager)
     }
     
     static func setupLog(minLevel: SwiftyBeaver.Level) {
@@ -136,28 +143,18 @@ struct RailwayManager: ParsableCommand {
     static func setupRoutes(layoutManager: LayoutManager) async throws  {
         let layout = layoutManager.layout
 
-        let path1 = try layout.path(fromBlock: layout.block("D"),
-                                    toBlock: layout.block("C"),
+        let path1 = try layout.path(fromBlock: layout.block("C"),
+                                    toBlock: layout.block("B"),
                                     direction: .forward)
-        let segment1 = Segment(path: path1, waitTime: .station)
-        let path2 = try layout.path(fromBlock: layout.block("C"),
-                                    toBlock: layout.block("A1"),
+        let segment1 = Segment(path: path1, waitTime: nil)
+        let path2 = try layout.path(fromBlock: layout.block("B"),
+                                    toBlock: layout.block("N"),
                                     direction: .forward)
-        let segment2 = Segment(path: path2, waitTime: nil)
-        
+        let segment2 = Segment(path: path2, waitTime: .station)
         let route1 = Route(id: 1, segments: [segment1, segment2])
         
         let train1 = Train(trainParams: TrainParams(id: 1, name: "Train 1", address: 20, trainSpeeds: [:]))
         try await layoutManager.runRoute(route: route1, train: train1)
-        
-        //            let path2 = try layout.path(fromBlock: layout.block("A1"),
-        //                                       toBlock: layout.block("A2"),
-        //                                       direction: .forward)
-        //            let segment2 = Segment(path: path2, waitTime: nil)
-        //            let route2 = Route(id: 2, segments: [segment2])
-        //
-        //            let train2 = Train(trainParams: TrainParams(id: 2, name: "Train 2", address: 21, trainSpeeds: [:]))
-        //            try await layoutManager.runRoute(route: route2, train: train2)
     }
     
     static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {

@@ -23,6 +23,7 @@ actor MQTTManager: Sendable {
         case signal     = 1
         case block      = 2
         case point      = 3
+        case train      = 4
     }
 
     struct LayoutItemState: Codable {
@@ -75,18 +76,17 @@ actor MQTTManager: Sendable {
         }
     }
     
-//    func sendTopolology(fromLayout: LayoutTopology) async throws {
-//        do {
-//            let payload = try String(decoding: JSONEncoder().encode(stateTopology(fromLayout)), as: UTF8.self)
-//            try await client?.publish(to: topic + layoutTopic,
-//                                      payload: ByteBufferAllocator().buffer(string: payload),
-//                                      qos: .atLeastOnce)
-//        } catch {
-//            handleJSONError(error)
-//            throw TrainError.applicationError(17)
-//        }
-//
-//    }
+    func sendTopolology(fromLayout: Layout) async throws {
+        do {
+            let payload = try String(decoding: JSONEncoder().encode(stateTopology(fromLayout)), as: UTF8.self)
+            try await client?.publish(to: topic + layoutTopic,
+                                      payload: ByteBufferAllocator().buffer(string: payload),
+                                      qos: .atLeastOnce)
+        } catch {
+            handleJSONError(error)
+            throw TrainError.applicationError("Failed to publish layout topology")
+        }
+    }
     
     func sendSignalState(signal: Signal, state: SignalState) async throws {
         do {
@@ -95,7 +95,7 @@ actor MQTTManager: Sendable {
                                         itemState: state.description)
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             if GlobalOptions.noMQTT {
-//                log.debug("Payload: \(payload)")
+                log.debug("Payload: \(payload)")
             } else {
                 try await client?.publish(to: topic + stateTopic,
                                           payload: ByteBufferAllocator().buffer(string: payload),
@@ -115,7 +115,7 @@ actor MQTTManager: Sendable {
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             
             if GlobalOptions.noMQTT {
-//                log.debug("Payload: \(payload)")
+                log.debug("Payload: \(payload)")
             } else {
                 try await client?.publish(to: topic + stateTopic,
                                           payload: ByteBufferAllocator().buffer(string: payload),
@@ -128,9 +128,13 @@ actor MQTTManager: Sendable {
         }
     }
 
-    func sendBlockRuntimeState(block: Block, blockState: BlockRuntimeState, trainState: TrainRuntimeState? = nil) async throws {
+    func sendBlockRuntimeState(block: Block,
+                               blockState: BlockRuntimeState,
+                               trainState: TrainRuntimeState? = nil,
+                               directionLocks: [Train] = []
+    ) async throws {
         var itemState: String = ""
-        var additionalInformation: String? = nil
+        var additionalInformation: String = ""
         
         switch blockState {
         case .vacant:
@@ -170,15 +174,19 @@ actor MQTTManager: Sendable {
         }
         
         do {
+            if directionLocks.isEmpty == false {
+                let lockString: String = "Locks: ".appending(directionLocks.map({ "\($0.id)" } ).joined(separator: ","))
+                additionalInformation.append(lockString)
+            }
             
             let state = LayoutItemState(itemType: .block,
                                         itemID: block.id,
                                         itemState: itemState,
-                                        additionalInformation: additionalInformation)
+                                        additionalInformation: additionalInformation.isEmpty ? nil : additionalInformation)
             
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             if GlobalOptions.noMQTT {
-//                log.debug("Payload: \(payload)")
+                log.debug("Payload: \(payload)")
             } else {
                 try await client?.publish(to: topic + stateTopic,
                                           payload: ByteBufferAllocator().buffer(string: payload),
@@ -213,22 +221,22 @@ extension MQTTManager {
         var points: [ Int ]
     }
 
-//    func stateTopology(_ from: LayoutTopology) -> StateTopology {
-//        let blockTopologies: [ String : BlockTopology ] = from.blocks.reduce(into: [:], { result, next in
-//            let fs = from.signals.first(where: { $0.value.location == next.value && $0.value.direction == .forward })
-//            let rs = from.signals.first(where: { $0.value.location == next.value && $0.value.direction == .reverse })
-//
-//            result[next.key] = BlockTopology(forwardEndSignal: fs?.key, reverseEndSignal: rs?.key)
-//        })
-//        
-//        let signalLocations: [ Int :  String ] = from.signals.reduce(into: [:], { result, next in
-//            result[next.key] = next.value.location.id
-//        })
-//
-//        return StateTopology(blockTopologies: blockTopologies,
-//                             signalLocations: signalLocations,
-//                             points: from.allPoints.map(\.id)
-//        )
-//    }
+    func stateTopology(_ from: Layout) -> StateTopology {
+        let blockTopologies: [ String : BlockTopology ] = from.blocks.reduce(into: [:], { result, next in
+            let fs = from.signals.first(where: { $0.location == next && $0.direction == .forward })
+            let rs = from.signals.first(where: { $0.location == next && $0.direction == .reverse })
+
+            result[next.id] = BlockTopology(forwardEndSignal: fs?.id, reverseEndSignal: rs?.id)
+        })
+        
+        let signalLocations: [ Int :  String ] = from.signals.reduce(into: [:], { result, next in
+            result[next.id] = next.location.id
+        })
+
+        return StateTopology(blockTopologies: blockTopologies,
+                             signalLocations: signalLocations,
+                             points: from.points.map(\.id)
+        )
+    }
 }
 

@@ -160,7 +160,7 @@ actor RouteOperator {
         lastCommandedTrainSpeed = speed
         // State of nil is no change
         if let state {
-            await trainController.setTrainState(train, state: state)
+            try await stateService.setStateForTrain(train, state: state)
         }
     }
     
@@ -181,7 +181,10 @@ actor RouteOperator {
                 log.info("\(rd): Starting route for train \(train.id) (\(train.name))")
                 
                 // Start the train moving and trigger processing for this block being occupied
-                try await setTrainSpeed(train, speed: .normal, state: .running(currentPathItem))
+                try await setTrainSpeed(startedTrain, speed: .normal, state: .running(currentPathItem))
+                
+                try await stateService.setStateForBlock(route.startBlock, newState: .occupied(startedTrain), trainStateChanged: true)
+                
                 routeState = .active
                 try await processOccupiedRouteBlock()
             }
@@ -352,7 +355,7 @@ actor RouteOperator {
 
         // Allocate resources to the next block
         if let blockingResource = try await reserveOrRun(currentPathItem, resumeSpeed: lastCommandedTrainSpeed) {
-            await trainController.setTrainState(train, state: .stoppingForResource(blockingResource))
+            try await stateService.setStateForTrain(train, state: .stoppingForResource(blockingResource))
         } else {
             // Set the points on this path without default values
             for setting in currentPathItem.pointSettings where setting.point.defaultPosition == nil {
@@ -371,7 +374,7 @@ actor RouteOperator {
         // Update the state to reflect the new item
         try await stateService.setStateForBlock(
             item.fromBlock,
-            newState : .occupied(train))
+            newState : .occupied(train), trainStateChanged: true)
         
         return .active
     }
