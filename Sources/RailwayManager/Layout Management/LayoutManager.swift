@@ -141,7 +141,7 @@ actor LayoutManager: Sendable {
     
     // MARK: Layout state
     
-    private func setState(_ newState: LayoutState) async throws {
+    func setState(_ newState: LayoutState) async throws {
         if self.layoutState == .error {
             log.error("Layout in error state, cannot update")
             return

@@ -97,6 +97,7 @@ struct RailwayManager: ParsableCommand {
         log.addDestination(console)
     }
     
+    // Main run function
     static func runManager(layoutManager: LayoutManager) async {
         log.info("Starting manager...")
         
@@ -117,7 +118,8 @@ struct RailwayManager: ParsableCommand {
             }
         } catch let error as TrainError {
             if error.isFatal {
-                fatalError("Fatal: \(error)")
+                try! await layoutManager.setState(.error)
+                fatalError("\(error)")
             } else {
                 log.error("Non-fatal: \(error)")
             }
@@ -128,6 +130,7 @@ struct RailwayManager: ParsableCommand {
                 log.error("Non-fatal CBUS Error: \(error)")
             }
         } catch {
+            // Log error and carry on
             log.error("Unexpected error: \(error)")
         }
         
