@@ -111,8 +111,10 @@ extension Layout {
                         pointSettings.removeAll()
                         
                     case .point(let point, let pointDirection):
-                        // Add the point setting to the list for the route
-                        pointSettings.append(PointSetting(point: point, direction: pointDirection))
+                        // Add the point setting to the list for the route (ignore single)
+                        if pointDirection != .single {
+                            pointSettings.append(PointSetting(point: point, direction: pointDirection))
+                        }
                         index += 1
                     }
                 }

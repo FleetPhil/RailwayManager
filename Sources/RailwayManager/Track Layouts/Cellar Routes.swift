@@ -1,0 +1,28 @@
+//
+//  File.swift
+//  RailwayManager
+//
+//  Created by Phil Diggens on 04/08/2026.
+//
+
+import Foundation
+
+extension RailwayManager {
+    static func setupRoutes(layoutManager: LayoutManager) async throws -> Route  {
+        let layout = layoutManager.layout
+
+        let path1 = try layout.path(fromBlock: layout.block("C"),
+                                    toBlock: layout.block("B"),
+                                    direction: .forward)
+        let segment1 = Segment(path: path1, waitTime: nil)
+        let path2 = try layout.path(fromBlock: layout.block("B"),
+                                    toBlock: layout.block("N"),
+                                    direction: .forward)
+        let segment2 = Segment(path: path2, waitTime: .station)
+        let route1 = Route(id: 1, segments: [segment1, segment2])
+        
+        return route1
+    }
+    
+
+}

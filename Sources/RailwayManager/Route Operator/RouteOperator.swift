@@ -154,7 +154,7 @@ actor RouteOperator {
     
     // Command a change to the train speed and update the status
     func setTrainSpeed(_ train: Train, speed: TrainSpeed, delay: TimeInterval = 0, state: TrainRuntimeState?) async throws {
-        try await trainController.commandTrain(train, speed: speed, delay: delay)
+        try await trainController.setSpeedforTrain(train, speed: speed, delay: delay)
 
         // Update the status
         lastCommandedTrainSpeed = speed
@@ -180,8 +180,8 @@ actor RouteOperator {
             if startedTrain == self.train {
                 log.info("\(rd): Starting route for train \(train.id) (\(train.name))")
                 
-                // Start the train moving and trigger processing for this block being occupied
-                try await setTrainSpeed(startedTrain, speed: .normal, state: .running(currentPathItem))
+                // Train will be commanded to move when first transition is clear
+                // Trigger processing for this block being occupied
                 
                 try await stateService.setStateForBlock(route.startBlock, newState: .occupied(startedTrain), trainStateChanged: true)
                 

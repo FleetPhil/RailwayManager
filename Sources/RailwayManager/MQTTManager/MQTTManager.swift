@@ -95,7 +95,7 @@ actor MQTTManager: Sendable {
                                         itemState: state.description)
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             if GlobalOptions.noMQTT {
-                log.debug("Payload: \(payload)")
+//                log.debug("Payload: \(payload)")
             } else {
                 try await client?.publish(to: topic + stateTopic,
                                           payload: ByteBufferAllocator().buffer(string: payload),
@@ -115,6 +115,26 @@ actor MQTTManager: Sendable {
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             
             if GlobalOptions.noMQTT {
+//                log.debug("Payload: \(payload)")
+            } else {
+                try await client?.publish(to: topic + stateTopic,
+                                          payload: ByteBufferAllocator().buffer(string: payload),
+                                          qos: .atLeastOnce)
+            }
+        } catch {
+            handleJSONError(error)
+            throw TrainError.applicationError("MQTT publish failed for point state")
+        }
+    }
+
+    func sendTrainState(train: Train, state: TrainRuntimeState) async throws {
+        do {
+            let state = LayoutItemState(itemType: .train,
+                                        itemID: "\(train.id)",
+                                        itemState: state.description)
+            let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
+            
+            if GlobalOptions.noMQTT {
                 log.debug("Payload: \(payload)")
             } else {
                 try await client?.publish(to: topic + stateTopic,
@@ -123,14 +143,12 @@ actor MQTTManager: Sendable {
             }
         } catch {
             handleJSONError(error)
-            try? await Task.sleep(for: .milliseconds(500))
-            throw TrainError.applicationError("MQTT publish failed for point state")
+            throw TrainError.applicationError("MQTT publish failed for train state")
         }
     }
 
     func sendBlockRuntimeState(block: Block,
                                blockState: BlockRuntimeState,
-                               trainState: TrainRuntimeState? = nil,
                                directionLocks: [Train] = []
     ) async throws {
         var itemState: String = ""
@@ -144,33 +162,6 @@ actor MQTTManager: Sendable {
             additionalInformation = "Train \(train)"
         case .occupied(let train), .vacating(let train):
             itemState = "occupied"
-            additionalInformation = {
-                switch trainState {
-                case .idle:
-                    return "idle (Train \(train))"
-                case .running:
-                    return "Running (Train \(train))"
-                case .waiting:
-                    return "Waiting (Train \(train))"
-                case .stoppingForResource(let resource):
-                    return "Stopping for \(resource)"
-                case .stoppedForResource(let trackResource, _):
-                    switch trackResource {
-                    case .point(let point):
-                        return "Waiting for point \(point.id) (Train \(train))"
-                    case .block(let block):
-                        return "Waiting for block \(block.id) (Train \(train))"
-                    }
-                case .stoppingAtSensor(let sensor, _):
-                    return "Stopping at sensor \(sensor.id) (Train \(train))"
-                case .stoppedAtSensor(let sensor):
-                    return "Stopped at sensor \(sensor.id) (Train \(train))"
-                case .none:
-                    return "No train state??"
-                case .stoppingForTimer(let sensor, let timer):
-                    return "Stopping at sensor \(sensor.id) for timer \(timer) (Train \(train))"
-                }
-            }()
         }
         
         do {
@@ -186,7 +177,7 @@ actor MQTTManager: Sendable {
             
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             if GlobalOptions.noMQTT {
-                log.debug("Payload: \(payload)")
+//                log.debug("Payload: \(payload)")
             } else {
                 try await client?.publish(to: topic + stateTopic,
                                           payload: ByteBufferAllocator().buffer(string: payload),

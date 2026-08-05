@@ -55,8 +55,11 @@ public final class DCCHardwarePoint: HardwarePoint, Sendable, CustomStringConver
     }
     
     public func setPoint(_ id: PointID, direction: PointDirection) async throws {
-        let command = dccPointCommand(id: id, direction: direction)
-        try await CBUSManager.shared.sendCBUSMessage(CBUSMessage(opCode: .RDCC3, address: id, dataBytes: command))
+        
+        let setDirection = isReversed ? direction.oppositeDirection : direction
+        
+        let command = dccPointCommand(address: address, direction: setDirection)
+        try await CBUSManager.shared.sendCBUSMessage(CBUSMessage(opCode: .RDCC3, address: address, dataBytes: command))
     }
     
     public func resetPoint(_ id: PointID, toDirection direction: PointDirection) async throws {
@@ -67,9 +70,9 @@ public final class DCCHardwarePoint: HardwarePoint, Sendable, CustomStringConver
     }
     
     // Convert point address and direction to 3 byte DCC command
-    private func dccPointCommand(id: PointID, direction: PointDirection) -> [UInt8] {
+    private func dccPointCommand(address: Int, direction: PointDirection) -> [UInt8] {
         
-        let address: UInt16 = UInt16(id) & 0x3FF      // 9 bits
+        let address: UInt16 = UInt16(address) & 0x3FF      // 9 bits
         let directionBit: UInt8 = direction == .splitBranch ? 0x00 : 0x01
         
         var result: [UInt8] = [ 0x00, 0x00, 0x00 ]

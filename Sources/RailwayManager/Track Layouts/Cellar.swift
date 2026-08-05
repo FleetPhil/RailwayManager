@@ -29,80 +29,91 @@ class Cellar: Layout, @unchecked Sendable {
             Block(id: "N")
         ]
         points = [
-            Point(id: 51, orientation: .left),
-            Point(id: 52, orientation: .left),
-            Point(id: 53, orientation: .left),
-            Point(id: 54, orientation: .right),
-            Point(id: 55, orientation: .right),
-            Point(id: 56, orientation: .left),
-            Point(id: 57, orientation: .right),
-            Point(id: 58, orientation: .right),
-            Point(id: 59, orientation: .right),
+            Point(id: 1, address: 55, orientation: .left, reversedConnection: true),
+            Point(id: 2, address: 52, orientation: .left),
+            Point(id: 3, address: 50, orientation: .left),
+            Point(id: 4, address: 54, orientation: .right, reversedConnection: true),
+            Point(id: 5, address: 59, orientation: .right),
+            Point(id: 6, address: 58, orientation: .left),
+            Point(id: 7, address: 51, orientation: .right),
+            Point(id: 8, address: 53, orientation: .right, reversedConnection: true),
+            Point(id: 9, address: 50, orientation: .right),
         ]
         
-        point(51).setConnection(from: .single, to: .point(point(52), .single))
-        point(51).setConnection(from: .splitStraight, to: .block(block("B")))
-        point(51).setConnection(from: .splitBranch, to: .block(block("C")))
+        point(1).setConnection(from: .single, to: .point(point(2), .single))
+        point(1).setConnection(from: .splitStraight, to: .block(block("B")))
+        point(1).setConnection(from: .splitBranch, to: .block(block("C")))
 
-        point(52).setConnection(from: .single, to: .point(point(51), .single))
-        point(52).setConnection(from: .splitStraight, to: .block(block("E")))
-        point(52).setConnection(from: .splitBranch, to: .point(point(53), .splitBranch))
+        point(2).setConnection(from: .single, to: .point(point(1), .single))
+        point(2).setConnection(from: .splitStraight, to: .block(block("E")))
+        point(2).setConnection(from: .splitBranch, to: .point(point(3), .splitBranch))
 
-        point(53).setConnection(from: .single, to: .block(block("D")))
-        point(53).setConnection(from: .splitStraight, to: .block(block("A")))
-        point(53).setConnection(from: .splitBranch, to: .point(point(52), .splitBranch))
+        point(3).setConnection(from: .single, to: .block(block("D")))
+        point(3).setConnection(from: .splitStraight, to: .block(block("A")))
+        point(3).setConnection(from: .splitBranch, to: .point(point(2), .splitBranch))
 
-        point(54).setConnection(from: .single, to: .block(block("D")))
-        point(54).setConnection(from: .splitStraight, to: .point(point(55), .single))
-        point(54).setConnection(from: .splitBranch, to: .block(block("L")))
+        point(4).setConnection(from: .single, to: .block(block("D")))
+        point(4).setConnection(from: .splitStraight, to: .point(point(5), .single))
+        point(4).setConnection(from: .splitBranch, to: .block(block("L")))
 
-        point(55).setConnection(from: .single, to: .point(point(54), .splitStraight))
-        point(55).setConnection(from: .splitStraight, to: .block(block("H")))
-        point(55).setConnection(from: .splitBranch, to: .block(block("J")))
+        point(5).setConnection(from: .single, to: .point(point(4), .splitStraight))
+        point(5).setConnection(from: .splitStraight, to: .block(block("H")))
+        point(5).setConnection(from: .splitBranch, to: .block(block("J")))
 
-        point(56).setConnection(from: .single, to: .block(block("K")))
-        point(56).setConnection(from: .splitStraight, to: .block(block("H")))
-        point(56).setConnection(from: .splitBranch, to: .block(block("J")))
+        point(6).setConnection(from: .single, to: .block(block("K")))
+        point(6).setConnection(from: .splitStraight, to: .block(block("H")))
+        point(6).setConnection(from: .splitBranch, to: .block(block("J")))
 
-        point(57).setConnection(from: .single, to: .block(block("K")))
-        point(57).setConnection(from: .splitStraight, to: .block(block("A")))
-        point(57).setConnection(from: .splitBranch, to: .point(point(58), .splitBranch))
+        point(7).setConnection(from: .single, to: .block(block("K")))
+        point(7).setConnection(from: .splitStraight, to: .block(block("A")))
+        point(7).setConnection(from: .splitBranch, to: .point(point(8), .splitBranch))
 
-        point(58).setConnection(from: .single, to: .block(block("B")))
-        point(58).setConnection(from: .splitStraight, to: .block(block("G")))
-        point(58).setConnection(from: .splitBranch, to: .point(point(57), .splitBranch))
+        point(8).setConnection(from: .single, to: .block(block("B")))
+        point(8).setConnection(from: .splitStraight, to: .block(block("G")))
+        point(8).setConnection(from: .splitBranch, to: .point(point(7), .splitBranch))
 
-        point(59).setConnection(from: .single, to: .block(block("L")))
-        point(59).setConnection(from: .splitStraight, to: .block(block("M")))
-        point(59).setConnection(from: .splitBranch, to: .block(block("N")))
+        point(9).setConnection(from: .single, to: .block(block("L")))
+        point(9).setConnection(from: .splitStraight, to: .block(block("M")))
+        point(9).setConnection(from: .splitBranch, to: .block(block("N")))
 
-        block("A").setExit(.forward, .point(PointSetting(point: point(53), direction: .splitStraight)))
-        block("B").setExit(.forward, .point(PointSetting(point: point(51), direction: .splitStraight)))
-        block("C").setExit(.forward, .point(PointSetting(point: point(51), direction: .splitBranch)))
-        block("D").setExit(.forward, .point(PointSetting(point: point(54), direction: .single)))
+        block("A").setExit(.forward, .point(PointSetting(point: point(3), direction: .splitStraight)))
+        block("B").setExit(.forward, .point(PointSetting(point: point(1), direction: .splitStraight)))
+        block("C").setExit(.forward, .point(PointSetting(point: point(1), direction: .splitBranch)))
+        block("D").setExit(.forward, .point(PointSetting(point: point(4), direction: .single)))
         block("E").setExit(.forward, .block(block("G")))
-        block("G").setExit(.forward, .point(PointSetting(point: point(58), direction: .splitStraight)))
-        block("H").setExit(.forward, .point(PointSetting(point: point(56), direction: .splitStraight)))
-        block("J").setExit(.forward, .point(PointSetting(point: point(56), direction: .splitBranch)))
-        block("K").setExit(.forward, .point(PointSetting(point: point(57), direction: .single)))
-        block("L").setExit(.forward, .point(PointSetting(point: point(59), direction: .single)))
+        block("G").setExit(.forward, .point(PointSetting(point: point(8), direction: .splitStraight)))
+        block("H").setExit(.forward, .point(PointSetting(point: point(6), direction: .splitStraight)))
+        block("J").setExit(.forward, .point(PointSetting(point: point(6), direction: .splitBranch)))
+        block("K").setExit(.forward, .point(PointSetting(point: point(7), direction: .single)))
+        block("L").setExit(.forward, .point(PointSetting(point: point(9), direction: .single)))
         block("M").setExit(.forward, .noExit)
         block("N").setExit(.forward, .noExit)
 
-        block("A").setExit(.reverse, .point(PointSetting(point: point(57), direction: .splitStraight)))
-        block("B").setExit(.reverse, .point(PointSetting(point: point(58), direction: .single)))
+        block("A").setExit(.reverse, .point(PointSetting(point: point(7), direction: .splitStraight)))
+        block("B").setExit(.reverse, .point(PointSetting(point: point(8), direction: .single)))
         block("C").setExit(.reverse, .noExit)
-        block("D").setExit(.reverse, .point(PointSetting(point: point(53), direction: .single)))
-        block("E").setExit(.reverse, .point(PointSetting(point: point(52), direction: .splitStraight)))
+        block("D").setExit(.reverse, .point(PointSetting(point: point(3), direction: .single)))
+        block("E").setExit(.reverse, .point(PointSetting(point: point(2), direction: .splitStraight)))
         block("G").setExit(.reverse, .block(block("E")))
-        block("H").setExit(.reverse, .point(PointSetting(point: point(55), direction: .splitStraight)))
-        block("J").setExit(.reverse, .point(PointSetting(point: point(55), direction: .splitBranch)))
-        block("K").setExit(.reverse, .point(PointSetting(point: point(56), direction: .single)))
-        block("L").setExit(.reverse, .point(PointSetting(point: point(54), direction: .splitBranch)))
-        block("M").setExit(.reverse, .point(PointSetting(point: point(59), direction: .splitStraight)))
-        block("N").setExit(.reverse, .point(PointSetting(point: point(59), direction: .splitBranch)))
+        block("H").setExit(.reverse, .point(PointSetting(point: point(5), direction: .splitStraight)))
+        block("J").setExit(.reverse, .point(PointSetting(point: point(5), direction: .splitBranch)))
+        block("K").setExit(.reverse, .point(PointSetting(point: point(6), direction: .single)))
+        block("L").setExit(.reverse, .point(PointSetting(point: point(4), direction: .splitBranch)))
+        block("M").setExit(.reverse, .point(PointSetting(point: point(9), direction: .splitStraight)))
+        block("N").setExit(.reverse, .point(PointSetting(point: point(9), direction: .splitBranch)))
 
         signals = [
+            Signal(id: 1, location: block("A"), indication: .point(point(7), .splitStraight), direction: .reverse),
+            Signal(id: 2, location: block("A"), indication: .point(point(3), .splitStraight), direction: .forward),
+            Signal(id: 3, location: block("B"), indication: .point(point(8), .single), direction: .reverse),
+            Signal(id: 4, location: block("B"), indication: .point(point(1), .splitStraight), direction: .forward),
+            Signal(id: 6, location: block("C"), indication: .point(point(1), .splitBranch), direction: .forward),
+            Signal(id: 7, location: block("D"), indication: .point(point(3), .single), direction: .reverse),
+            Signal(id: 8, location: block("D"), indication: .point(point(4), .single), direction: .forward),
+            Signal(id: 9, location: block("E"), indication: .point(point(2), .splitStraight), direction: .reverse),
+            Signal(id: 10, location: block("E"), indication: .block(block("G")), direction: .forward),
+            Signal(id: 11, location: block("G"), indication: .block(block("E")), direction: .reverse),
+            Signal(id: 12, location: block("G"), indication: .point(point(8), .splitStraight), direction: .forward),
         ]
             
         // Sensor location start/end relative to the forward direction

@@ -30,9 +30,24 @@ actor LayoutTrainController {
         try await CBUSManager.shared.releaseSession(session)
         await dccSessionStore.setDormant(train)
     }
-
-    func session(for train: Train) async -> Int? {
-        await dccSessionStore.session(for: train)
+    
+    private func activeDCCSession(_ train: Train) async throws -> Int {
+        // Wait for an active DCC session, but not forever: a command (especially a stop)
+        // must fail loudly rather than hang if the session never arrives
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        var activeSession = await dccSessionStore.session(for: train)
+        while activeSession == nil {
+            guard ContinuousClock.now < deadline else {
+                throw TrainError.noDCCSession(train.id)
+            }
+            try await Task.sleep(for: .milliseconds(200))
+            activeSession = await dccSessionStore.session(for: train)
+        }
+        guard let session = activeSession else {
+            throw TrainError.noDCCSession(train.id)
+        }
+        
+        return session
     }
     
     func trainDirection(_ train: Train) throws -> Direction {
@@ -76,8 +91,10 @@ actor LayoutTrainController {
         return state
     }
     
-    func setTrainState(_ train: Train, state: TrainRuntimeState) {
+    func setTrainState(_ train: Train, state: TrainRuntimeState) async throws {
         trainStates[train] = state
+        
+        try await MQTTManager.shared.sendTrainState(train: train, state: state)
     }
     
     func sendKeepAlives() async throws {
@@ -86,7 +103,7 @@ actor LayoutTrainController {
       }
     }
     
-    func commandTrain(_ train: Train,
+    func setSpeedforTrain(_ train: Train,
                       speed: TrainSpeed,
                       delay: TimeInterval = 0) async throws {
         
@@ -96,25 +113,19 @@ actor LayoutTrainController {
             log.verbose("Train \(train) speed is \(speed) \(direction)")
             return
         }
-
-        // Wait for an active DCC session, but not forever: a command (especially a stop)
-        // must fail loudly rather than hang if the session never arrives
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        var activeSession = await dccSessionStore.session(for: train)
-        while activeSession == nil {
-            guard ContinuousClock.now < deadline else {
-                throw TrainError.noDCCSession(train.id)
-            }
-            try await Task.sleep(for: .milliseconds(200))
-            activeSession = await dccSessionStore.session(for: train)
-        }
-        guard let session = activeSession else {
-            throw TrainError.noDCCSession(train.id)
-        }
         
+        let session = try await activeDCCSession(train)
+
         try await train.setSpeed(speed, direction: direction, delay: delay, session: session)
         log.verbose("Train \(train) speed is \(speed) \(direction)")
     }
+    
+    public func setTrainFunction(train: Train, function: Int, on: Bool) async throws {
+        let session = try await activeDCCSession(train)
+        
+        try await train.setFunction(function, on: on, session: session)
+    }
+
     
     // Stop every active train, best effort: a failure for one train must not prevent
     // stopping the others. Falls back to a track-wide emergency stop on any failure.
@@ -123,8 +134,8 @@ actor LayoutTrainController {
         let activeTrains = await dccSessionStore.activeTrains()
         for activeTrain in activeTrains {
             do {
-                try await commandTrain(activeTrain, speed: .stop)
-                setTrainState(activeTrain, state: .idle)
+                try await setSpeedforTrain(activeTrain, speed: .stop)
+                try await setTrainState(activeTrain, state: .idle)
             } catch {
                 stopFailed = true
                 log.error("Failed to stop train \(activeTrain): \(error)")

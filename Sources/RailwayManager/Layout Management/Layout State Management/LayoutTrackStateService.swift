@@ -111,26 +111,20 @@ actor LayoutTrackStateService {
     func setStateForTrain(_ train: Train, state: TrainRuntimeState) async throws {
         
         if await trainController.isNewTrain(train) {
-            log.verbose("Train \(train) state request from none) to \(state)")
+            log.verbose("Train \(train) state request from none to \(state)")
         } else {
             let oldState = try await trainController.trainState(train)
+            if oldState == state { return }
+            
             log.verbose("Train \(train) state request from \(oldState, default: "none") to \(state)")
         }
         
-        await trainController.setTrainState(train, state: state)
+        try await trainController.setTrainState(train, state: state)
     }
     
     func setStateForBlock(_ block: Block, newState: BlockRuntimeState, trainStateChanged: Bool = false) async throws {
         let oldState = blockStates[block] ?? .vacant
         
-        // Publish if the block or train state has changed
-        // Telemetry: a publish failure must not fail the state change
-        if newState != oldState || trainStateChanged {
-            let trainState = newState.train == nil ? nil : try? await trainController.trainState(newState.train!)
-            let directionLocks = directionLocks[block] ?? []
-            try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: newState, trainState: trainState, directionLocks: directionLocks)
-        }
-
         // Ignore
         guard oldState != newState else { return }
         log.verbose("Block \(block) state request from \(oldState) to \(newState)")
@@ -203,6 +197,8 @@ actor LayoutTrackStateService {
             blockStates[block] = newState
         }
         
+        // Telemetry: a publish failure must not fail the state change
+        try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: newState)
     }
     
     func releaseDirectionLock(block: Block, train: Train) async throws {
@@ -324,8 +320,7 @@ actor LayoutTrackStateService {
         }
         
         // Telemetry: a publish failure must not fail the reservation
-        let trainState = try? await trainController.trainState(forTrain)
-        try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain), trainState: trainState, directionLocks: directionLocks[item.toBlock] ?? [])
+        try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain), directionLocks: directionLocks[item.toBlock] ?? [])
         
         return nil
     }

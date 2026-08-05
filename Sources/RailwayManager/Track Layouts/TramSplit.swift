@@ -19,7 +19,7 @@ class TramSplit: Layout, @unchecked Sendable {
         ]
         
         points = [
-            Point(id: 51,
+            Point(id: 51, address: 51,
                   connections: [
                     .single : .block(block("A")),
                     .splitStraight : .block(block("B")),

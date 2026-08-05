@@ -32,7 +32,7 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
         case .idle:
             "Idle"
         case .running(let item):
-            "Running (\(item)"
+            "Running (\(item))"
         case .waiting:
             "Waiting"
         case .stoppingForResource(let trackResource):

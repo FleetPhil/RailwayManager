@@ -36,6 +36,14 @@ public enum PointDirection: String, Hashable, CustomStringConvertible, Codable, 
             return "Single"
         }
     }
+    
+    public var oppositeDirection: PointDirection {
+        switch self {
+        case .single:           .single
+        case .splitStraight:    .splitBranch
+        case .splitBranch:      .splitStraight
+        }
+    }
 }
 
 enum BranchOrientation {
@@ -78,12 +86,14 @@ final class Point: @unchecked Sendable, CustomStringConvertible {
     let defaultPosition: PointDirection?
 
     init(id: Int,
+         address: Int,
          connections: [ PointDirection : PointConnection] = [:],
          orientation: BranchOrientation,
-         defaultPosition: PointDirection? = nil)  {
+         defaultPosition: PointDirection? = nil,
+         reversedConnection: Bool = false
+    )  {
         self.id = id
-        // TODO: set true hardware config (DCC/CBUS) in init, separate id and DCC/CBUS address
-        self.hardware = DCCHardwarePoint(id: id, defaultPosition: defaultPosition, address: id, isReversed: false)
+        self.hardware = DCCHardwarePoint(id: id, defaultPosition: defaultPosition, address: address, isReversed: reversedConnection)
         self.branchOrientation = orientation
         self.connections = connections
         self.defaultPosition = defaultPosition

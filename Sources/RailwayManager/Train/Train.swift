@@ -82,6 +82,10 @@ struct Train: Sendable, CustomStringConvertible {
         try await hardware.setSpeed(power, direction: direction, delay: delay ?? 0.0, session: session)
     }
     
+    func setFunction(_ function: Int, on: Bool, session: Int) async throws {
+        try await hardware.setFunction(function, on: on, session: session)
+    }
+    
     func powerForSpeed(_ trainSpeed: TrainSpeed) -> Int {
         switch trainSpeed {
         case .manual(speed: let speed):     return speed

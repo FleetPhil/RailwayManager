@@ -23,9 +23,9 @@ class TestTrack2: Layout, @unchecked Sendable {
             Block(id: "D")
         ]
         points = [
-            Point(id: 50, orientation: .left),
-            Point(id: 51, orientation: .right),
-            Point(id: 52, orientation: .right)
+            Point(id: 50, address: 50, orientation: .left),
+            Point(id: 51, address: 51, orientation: .right),
+            Point(id: 52, address: 52, orientation: .right)
         ]
         
         point(50).setConnection(from: .single, to: .block(block("A1")))
