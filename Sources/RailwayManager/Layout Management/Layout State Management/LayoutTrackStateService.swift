@@ -309,8 +309,8 @@ actor LayoutTrackStateService {
         
         for point in item.pointSettings.map( \.point ) {
             log.verbose("Point \(point) set to reserved \(forTrain)")
-            pointStates[point]?.reservedByTrain = forTrain
-            pointStates[point]?.freeWithBlock = item.fromBlock
+            
+            try await setReservedTrainForPoint(point, to: forTrain, associatedStartBlock: item.fromBlock)
         }
         // MARK: End critical section
         
@@ -389,7 +389,8 @@ actor LayoutTrackStateService {
         try await point.setDirection(newDirection)
 
         // Telemetry: a publish failure must not fail the state change
-        try? await MQTTManager.shared.sendPointState(point: point, state: newDirection)
+        let associatedBlock = pointStates[point]?.freeWithBlock?.id
+        try? await MQTTManager.shared.sendPointState(point: point, state: newDirection, associatedBlock: associatedBlock)
     }
     
     // Reset point to default condition or straight
@@ -430,6 +431,11 @@ actor LayoutTrackStateService {
                     log.warning("Failed to set point to default position")
                 }
             }
+        }
+        
+        // Send telemetry
+        if let direction = pointStates[point]?.direction {
+            try? await MQTTManager.shared.sendPointState(point: point, state: direction, associatedBlock: associatedStartBlock?.id)
         }
     }
     

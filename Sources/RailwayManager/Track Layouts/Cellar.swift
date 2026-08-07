@@ -114,6 +114,16 @@ class Cellar: Layout, @unchecked Sendable {
             Signal(id: 10, location: block("E"), indication: .block(block("G")), direction: .forward),
             Signal(id: 11, location: block("G"), indication: .block(block("E")), direction: .reverse),
             Signal(id: 12, location: block("G"), indication: .point(point(8), .splitStraight), direction: .forward),
+            Signal(id: 13, location: block("H"), indication: .point(point(5), .splitStraight), direction: .reverse),
+            Signal(id: 14, location: block("H"), indication: .point(point(6), .splitStraight), direction: .forward),
+            Signal(id: 15, location: block("J"), indication: .point(point(5), .splitBranch), direction: .reverse),
+            Signal(id: 16, location: block("J"), indication: .point(point(6), .splitBranch), direction: .forward),
+            Signal(id: 17, location: block("K"), indication: .point(point(6), .single), direction: .reverse),
+            Signal(id: 18, location: block("K"), indication: .point(point(7), .single), direction: .forward),
+            Signal(id: 19, location: block("L"), indication: .point(point(5), .splitBranch), direction: .reverse),
+            Signal(id: 20, location: block("L"), indication: .point(point(9), .single), direction: .forward),
+            Signal(id: 21, location: block("M"), indication: .point(point(9), .splitStraight), direction: .reverse),
+            Signal(id: 23, location: block("N"), indication: .point(point(9), .splitBranch), direction: .reverse),
         ]
             
         // Sensor location start/end relative to the forward direction

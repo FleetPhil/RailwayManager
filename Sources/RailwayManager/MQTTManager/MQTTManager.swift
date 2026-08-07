@@ -107,11 +107,11 @@ actor MQTTManager: Sendable {
         }
     }
 
-    func sendPointState(point: Point, state: PointDirection) async throws {
+    func sendPointState(point: Point, state: PointDirection, associatedBlock: String?) async throws {
         do {
             let state = LayoutItemState(itemType: .point,
                                         itemID: "\(point.id)",
-                                        itemState: state.rawValue)
+                                        itemState: state.rawValue + "/" + "\(associatedBlock ?? "-")")
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             
             if GlobalOptions.noMQTT {
