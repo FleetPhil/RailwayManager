@@ -11,50 +11,9 @@ enum RouteState: Equatable {
     case dormant
     case starting           // Start sequence in progress
     case active
-    case waitingForEvent(LayoutEvent)
     case ending
     case ended
     case error(TrainError)
-}
-
-// Actions to execute at a sensor
-enum SensorAction: Equatable {
-    case stop                           // Stop
-    case proceed                        // Carry on
-    case requestPathItem(PathItem)      // Request resource
-}
-
-// Individual commands that the route manager will execute, based on the route segments
-enum RouteAction: CustomStringConvertible {
-    // Lock the blocks in the path in the path direction
-    case lockPath(Path)
-    // Execute action at sensor
-    case waitForSensor(Sensor, SensorAction)
-    case setDirection(Direction)
-    case setSpeed(TrainSpeed)
-    case waitForEvent(LayoutEvent)
-    case executeSensorAction(Sensor, SensorAction)
-    
-    case wait(WaitTime)
-    
-    var description: String {
-        switch self {
-        case .lockPath(let path):
-            "lock \(path.pathItems.first.map { "\($0.fromBlock)" } ?? "?")-\(path.pathItems.last.map { "\($0.toBlock)" } ?? "?"), \(path.direction)"
-        case .waitForSensor(let sensor, let sensorAction):
-            "wait for sensor \(sensor, default: "none"), \(sensorAction)"
-        case .setDirection(let direction):
-            "set direction \(direction)"
-        case .setSpeed(let trainSpeed):
-            "set speed \(trainSpeed)"
-        case .waitForEvent(let layoutEvent):
-            "wait for \(layoutEvent)"
-        case .wait(let waitTime):
-            "wait \(waitTime)"
-        case .executeSensorAction(let sensor, let action):
-            "execute action \(action) for sensor \(sensor)"
-        }
-    }
 }
 
 struct CurrentItemIndex {
@@ -459,7 +418,7 @@ actor RouteOperator {
         case .dormant:
             return true
             
-        case .starting, .active, .waitingForEvent:          // Unexpected
+        case .starting, .active:          // Unexpected
             log.error("\(rd): \(route): Run route \(route.id) but already in running state")
             return false
         case .error:
