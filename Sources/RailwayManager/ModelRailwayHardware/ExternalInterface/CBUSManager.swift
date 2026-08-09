@@ -40,17 +40,20 @@ actor CBUSManager: Sendable {
     static let shared = CBUSManager()
     
     // Serial port can be overridden without rebuilding via an environment variable
-    private let serialPortName: String = ProcessInfo.processInfo.environment["CBUS_SERIAL_PORT"] ?? "/dev/cu.usbmodem101"
-    private let serialPort: SerialPort
+    private var serialPort: SerialPort!
     
     private var sessionMap: [ Int : Int] = [:]        // Address : Session
     
-    private init() {
-        serialPort = SerialPort(path: serialPortName)
-    }
+    private init() { }
     
     func setup() throws {
         if GlobalOptions.noCBUS == false {
+            if let serialPortName = findCBUSSerialPortName() {
+                serialPort = SerialPort(path: serialPortName)
+            } else {
+                throw TrainError.CBUSError("No CANUSB4 found")
+            }
+            
             try serialPort.openPort()
             try serialPort.setSettings(
                 baudRateSetting: .symmetrical(.baud115200),

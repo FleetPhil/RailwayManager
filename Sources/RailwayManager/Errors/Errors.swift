@@ -21,6 +21,7 @@ enum TrainError: Error, Equatable {
     case noTrainDirection(Int)
     case lockAlreadyExists(Block, Train)
     case noLockToRelease(Block, Train)
+    case CBUSError(String)
     case MQTTConnectFail
     case noDCCSession(Int)
     
@@ -39,6 +40,7 @@ enum TrainError: Error, Equatable {
         case .noTrainDirection:             true
         case .lockAlreadyExists:            false
         case .noLockToRelease:              true
+        case .CBUSError:                    true
         case .MQTTConnectFail:              true
         case .noDCCSession:                 true
         }
