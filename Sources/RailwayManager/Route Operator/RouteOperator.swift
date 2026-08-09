@@ -9,6 +9,7 @@ import Foundation
 
 enum RouteState: Equatable {
     case dormant
+    case starting           // Start sequence in progress
     case active
     case waitingForEvent(LayoutEvent)
     case ending
@@ -169,6 +170,35 @@ actor RouteOperator {
         try await setTrainSpeed(train, speed: .stop, state: state)
     }
     
+    // MARK: - Route start sequence
+    
+    // In-progress start sequence - runs in its own task so its delays do not block event processing
+    private var startSequenceTask: Task<Void, Never>? = nil
+    
+    // Execute the train's start functions (e.g. sounds) in order, waiting for each
+    // function's delay before the next, then move off
+    private func runStartSequence() async {
+        defer { startSequenceTask = nil }
+        
+        do {
+            for startFunction in train.startFunctions {
+                log.verbose("\(rd): Start function \(startFunction.startFunction) for train \(train.id)")
+                try await trainController.setTrainFunction(train: train, function: startFunction.startFunction, on: true)
+                try await Task.sleep(for: .seconds(startFunction.delay))
+            }
+            
+            // Start sequence complete: sensor events are processed from here on
+            routeState = .active
+            
+            try await processOccupiedRouteBlock()
+        } catch is CancellationError {
+            // Route was cancelled during the start sequence: nothing to do
+        } catch {
+            log.error("\(rd): Route start failed: \(error)")
+            routeState = .error(error as? TrainError ?? .applicationError("Route start failed: \(error)"))
+        }
+    }
+    
     // MARK: - Event processing
     
     // Process the track event and execute route commands if able based on the layout state
@@ -185,11 +215,13 @@ actor RouteOperator {
                 
                 try await stateService.setStateForBlock(route.startBlock, newState: .occupied(startedTrain))
                 
-                routeState = .active
+                routeState = .starting
                 
-                
-                
-                try await processOccupiedRouteBlock()
+                // Run the start sequence in its own task so that the delays between
+                // start functions do not block event processing for other trains
+                startSequenceTask = Task {
+                    await self.runStartSequence()
+                }
             }
             
         case (.ended, .didEndRoute(let endedTrain)):
@@ -197,6 +229,9 @@ actor RouteOperator {
                 log.verbose("\(rd): Ended route for train \(self.train)")
                 routeState = .ended
             }
+            
+        case (.starting, .didSetSensor):
+            break               // Ignore sensor events during the start sequence
             
         case (_, .didSetSensor(let sensorID, let orientation)):
             try await handleSensorSet(sensorID, orientation: orientation)
@@ -424,7 +459,7 @@ actor RouteOperator {
         case .dormant:
             return true
             
-        case .active, .waitingForEvent:          // Unexpected
+        case .starting, .active, .waitingForEvent:          // Unexpected
             log.error("\(rd): \(route): Run route \(route.id) but already in running state")
             return false
         case .error:

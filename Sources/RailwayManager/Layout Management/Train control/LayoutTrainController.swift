@@ -121,6 +121,11 @@ actor LayoutTrainController {
     }
     
     public func setTrainFunction(train: Train, function: Int, on: Bool) async throws {
+        if GlobalOptions.noCBUS {
+            log.verbose("Train \(train) function \(function) \(on ? "on" : "off")")
+            return
+        }
+        
         let session = try await activeDCCSession(train)
         
         try await train.setFunction(function, on: on, session: session)

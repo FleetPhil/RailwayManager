@@ -25,7 +25,7 @@ struct Trains {
             ]
         }
         
-        let sbbParams = TrainParams(id: 1, name: "SBB Re430", address: 20, trainSpeeds: sbbSpeeds, startFunctions: [])
+        let sbbParams = TrainParams(id: 1, name: "SBB Re430", address: 20, trainSpeeds: sbbSpeeds, startFunctions: sbbStartFunctions)
         return Train(trainParams: sbbParams)
     }
 }

@@ -57,7 +57,7 @@ struct Train: Sendable, CustomStringConvertible {
     private let hardware: HardwareTrain
     
     private let speeds: [ TrainSpeed : TrainSpeedSetting]
-    private let startFunctions: [TrainStartFunction]
+    let startFunctions: [TrainStartFunction]
     
     let trainFrontSensorOrientation: SensorEventOrientation = .north
     let trainRearSensorOrientation: SensorEventOrientation = .south
