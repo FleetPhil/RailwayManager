@@ -134,7 +134,7 @@ actor LayoutManager: Sendable {
             trainController: trackStateService.trainController
         )
         self.routeOperators[train] = routeOperator
-        try await routeOperator.runRoute()
+        try await routeOperator.resetRoute()
         
         await LayoutEventHub.shared.publish(.didStartRoute(train))
     }

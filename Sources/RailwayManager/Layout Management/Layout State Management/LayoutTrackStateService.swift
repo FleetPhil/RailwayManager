@@ -122,7 +122,7 @@ actor LayoutTrackStateService {
         try await trainController.setTrainState(train, state: state)
     }
     
-    func setStateForBlock(_ block: Block, newState: BlockRuntimeState, trainStateChanged: Bool = false) async throws {
+    func setStateForBlock(_ block: Block, newState: BlockRuntimeState) async throws {
         let oldState = blockStates[block] ?? .vacant
         
         // Ignore

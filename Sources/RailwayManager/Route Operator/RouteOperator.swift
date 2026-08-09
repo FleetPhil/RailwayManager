@@ -129,7 +129,7 @@ actor RouteOperator {
     
     // MARK: - Route lifecycle
     
-    func runRoute() async throws {
+    func resetRoute() async throws {
         guard validForStart(route: route) else {
             throw TrainError.invalidRoute(route.id)
         }
@@ -142,7 +142,7 @@ actor RouteOperator {
         try await stateService.setStateForTrain(train, state: .idle)
         try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train))
         
-        // Will be incremented at roiute start
+        // Will be incremented at route start
         currentItemIndex = CurrentItemIndex(segmentIndex: 0, pathItemIndex: -1)
         
         try await LayoutEventHub.shared.publish(.didOccupyBlock(route.startBlock, train))
@@ -183,9 +183,12 @@ actor RouteOperator {
                 // Train will be commanded to move when first transition is clear
                 // Trigger processing for this block being occupied
                 
-                try await stateService.setStateForBlock(route.startBlock, newState: .occupied(startedTrain), trainStateChanged: true)
+                try await stateService.setStateForBlock(route.startBlock, newState: .occupied(startedTrain))
                 
                 routeState = .active
+                
+                
+                
                 try await processOccupiedRouteBlock()
             }
             
@@ -374,7 +377,7 @@ actor RouteOperator {
         // Update the state to reflect the new item
         try await stateService.setStateForBlock(
             item.fromBlock,
-            newState : .occupied(train), trainStateChanged: true)
+            newState : .occupied(train))
         
         return .active
     }

@@ -5,10 +5,17 @@
 //  Created by Phil Diggens on 20/03/2026.
 //
 
+import Foundation
+
 
 struct TrainSpeedSetting: Codable, Equatable {
     var power: Int      // Power setting 0-100
     var speed: Int      // Speed in cm/sec
+}
+
+struct TrainStartFunction: Codable, Equatable {
+    var startFunction: Int
+    var delay: TimeInterval
 }
 
 struct TrainParams: Codable, Identifiable, Equatable {
@@ -17,4 +24,6 @@ struct TrainParams: Codable, Identifiable, Equatable {
     var address: Int
     
     var trainSpeeds: [ TrainSpeed : TrainSpeedSetting ]
+    
+    var startFunctions: [TrainStartFunction]
 }
