@@ -50,6 +50,7 @@ actor CBUSManager: Sendable {
         if GlobalOptions.noCBUS == false {
             if let serialPortName = findCBUSSerialPortName() {
                 serialPort = SerialPort(path: serialPortName)
+                log.info("Found CANUSB4 on \(serialPortName)")
             } else {
                 throw TrainError.CBUSError("No CANUSB4 found")
             }
@@ -60,6 +61,9 @@ actor CBUSManager: Sendable {
                 minimumBytesToRead: 1)
         }
         
+        try setSignal(211, state: .stop)
+        log.debug("Signal 211 to red")
+
     }
     
     func setPoint(_ id: Int, direction: PointDirection) throws {
@@ -73,27 +77,20 @@ actor CBUSManager: Sendable {
         try setPoint(id, direction: toDirection)
     }
     
-    func setSignal(_ id: Int, state: SignalState) throws {
-        if state == .off {
-            try sendCBUSMessage(CBUSMessage(opCode: .ASOF, device: id))
-        } else {
-            try sendCBUSMessage(CBUSMessage(opCode: .ASON1, device: id, dataBytes: [state.rawValue]))
-        }
+    func setSignal(_ address: Int, state: SignalState) throws {
+        if address == 0 { return }          // Dummy device
+        try sendCBUSMessage(CBUSMessage(opCode: .ASON1, device: address, dataBytes: [state.rawValue]))
     }
     
     func powerTrain(session: Int, direction: Direction, speed: Int, delay: TimeInterval = 0) throws {
         
-        // Turn the light on
-        try setFunction(0, session: session, on: true)
-        
-        // Speed for CBUS is 0-255
-        var speedByte: UInt8 = UInt8 (speed * 255 / 100)
-        if direction == .reverse {
-            speedByte |= 0x80           // Set b0 if reverse
+        // Set the light if stopped and commanded to move
+        if speed != 0 {
+            try setFunction(0, session: session, on: true)
         }
         
         // OK, all ready - power the train after an optional interval
-        let cbus = CBUSMessage(opCode: .DSPD, session: session, dataBytes: [speedByte])
+        let cbus = CBUSMessage(opCode: .DSPD, session: session, direction: direction, speed: speed)
         
         if delay == 0 {
             try sendCBUSMessage(cbus)
@@ -152,75 +149,87 @@ extension CBUSManager {
     func sendCBUSMessage(_ message: CBUSMessage) throws {
         let cbusHeader = ":S6FC0N"
 
-        var dataToSend: [UInt8] = try {
-            
-            var data = cbusHeader + String(format: "%02X", message.opCode.rawValue)
-            
+        let dataToSend: String = {
+            var data = cbusHeader + message.opCode.rawValue.hexStr
             switch message.opCode {
-            case .ASON, .ASON1, .ASON2, .ASOF, .ASOF1, .ASOF2:
-                guard let device = message.device else {
-                    throw CBUSError.MissingField("device for \(message.opCode)")
-                }
-                guard message.dataBytes.count >= message.opCode.dataByteCount - 1 else {
-                    throw CBUSError.MissingField("data bytes for \(message.opCode)")
-                }
-                
+            case .ASON, .ASON1, .ASON2, .ASON3, .ASOF, .ASOF1, .ASOF2:
                 // Convert the node and device ID into 4 hex bytes
-                data += String(format: "%08X", device)
+                data += String(format: "%08X", message.device!)
                 
                 // Add the correct number of data bytes for the OpCode
-                if message.opCode.dataByteCount > 1 { data += String(format: "%02x", message.dataBytes[0]) }
-                if message.opCode.dataByteCount > 2 { data += String(format: "%02x", message.dataBytes[1]) }
-                if message.opCode.dataByteCount > 3 { data += String(format: "%02x", message.dataBytes[2]) }
-                return (data + ";").asciiValues
+                if message.opCode.dataByteCount > 1 { data += message.dataBytes[0].hexStr }
+                if message.opCode.dataByteCount > 2 { data += message.dataBytes[1].hexStr }
+                if message.opCode.dataByteCount > 3 { data += message.dataBytes[2].hexStr }
+                return data
                 
-            case .DKEEP, .KLOC:
-                guard let session = message.session else {
-                    throw CBUSError.MissingField("session for \(message.opCode)")
-                }
-                return (data + String(format: "%02X", session) + ";").asciiValues
+            case .DKEEP:
+                return data + message.session!.hexStr
                 
             case .RLOC:
-                guard let address = message.address else {
-                    throw CBUSError.MissingField("address for \(message.opCode)")
-                }
-                return (data + String(format: "%04X", address) + ";").asciiValues
+                return data + String(format: "%04X", message.address!)
 
-            case .DSPD, .STMOD, .DFNON, .DFNOF:
-                guard let session = message.session else {
-                    throw CBUSError.MissingField("session for \(message.opCode)")
+            case .KLOC:
+                return data + message.session!.hexStr
+
+            case .DSPD:
+                var speedByte: UInt8 = UInt8 (message.speed!)
+                if message.direction! == .reverse {
+                    speedByte |= 0x80           // Set b0 if reverse
                 }
-                guard let dataByte = message.dataBytes.first else {
-                    throw CBUSError.MissingField("data byte for \(message.opCode)")
-                }
-                return (data + String(format: "%02X", session)
-                        + String(format: "%02X", dataByte) + ";").asciiValues
+                return data + message.session!.hexStr + speedByte.hexStr
+                
+            case .STMOD:
+                return data + message.session!.hexStr + message.dataBytes[0].hexStr
                 
             case .STOP:     // Emergency stop
-                return (data + ";").asciiValues
+                return data
+                
+            case .DFNON, .DFNOF:
+                return data + message.session!.hexStr + message.dataBytes[0].hexStr
                 
             case .ARST:
-                return (data + ";").asciiValues
+                return data
+                
+            case .WCVS:
+                return data
+                + 0x00.hexStr                       // Session
+                + (message.cv! / 256).hexStr        // CV High
+                + (message.cv! % 256).hexStr        // CV Low
+                + 0x00.hexStr                       // Mode - direct byte
+                + message.dataBytes[0].hexStr       // Value
+
+            case .QCVS:
+                return data
+                + 0x00.hexStr                       // Session
+                + (message.cv! / 256).hexStr        // CV High
+                + (message.cv! % 256).hexStr        // CV Low
+                + 0x00.hexStr                       // Mode - direct byte
+
+            case .WCVO:
+                return data
+                + (message.session!).hexStr         // Session
+                + (message.cv! / 256).hexStr        // CV High
+                + (message.cv! % 256).hexStr        // CV Low
+                + message.dataBytes[0].hexStr       // Value
+                
+            case .RDCC3:
+                return data
+                + 1.hexStr                          // Number of times to send packet
+                + message.dataBytes[0].hexStr
+                + message.dataBytes[1].hexStr
+                + message.dataBytes[2].hexStr
 
             default:
-                return []
+                return ""
             }
         }()
         
-        // Translate to strings for log
-//        if message.opCode != .DKEEP {               // Ignore keepalive
-//            let debugMessage = dataToSend
-//                .map({ Character(UnicodeScalar($0))})           // Map to ASCII characters
-//                .dropFirst(7)                                   // Ignore header
-//                .unfoldSubSequences(limitedTo: 2)               // Split into pairs
-//                .map({ String($0.first!) + String($0.last!) })  // Convert to array of 2 char stringsstring
-
-//            log.debug("Sending CBUS \(debugMessage)")
-//        }
+        // Add terminator and convert to ascii
+        var asciiData = (dataToSend + ";").asciiValues
 
         if (GlobalOptions.noCBUS == false) {
             do {
-                let _ = try serialPort.writeBytes(from: &dataToSend, size: dataToSend.count)
+                let _ = try serialPort.writeBytes(from: &asciiData, size: asciiData.count)
             } catch {
                 throw CBUSError.CBUSUnreachable
             }
@@ -386,5 +395,9 @@ extension StringProtocol {
         return self.first?.asciiValue ?? Character("?").asciiValue!
     }
 }
+extension BinaryInteger where Self: CVarArg {
+    var hexStr: String { String(format: "%02X", self) }
+}
+
 
 

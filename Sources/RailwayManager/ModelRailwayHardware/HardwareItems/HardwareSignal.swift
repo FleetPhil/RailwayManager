@@ -16,18 +16,20 @@ public protocol HardwareSignal: Sendable {
 }
 
 final public class CBUSHardwareSignal: HardwareSignal, CustomStringConvertible, Sendable {
-    internal init(id: Int) {
+    internal init(id: Int, address: Int) {
         self.id = id
+        self.address = address
     }
 
     nonisolated public var description: String {
         return "\(id)"
     }
     
-    let id: Int                             // As known to hardware controller
+    let id: Int                 // Logical layout ID
+    let address: Int            // CBUS address
     
     public func setState(_ state: SignalState) async throws {
-        try await CBUSManager.shared.setSignal(id, state: state)
+        try await CBUSManager.shared.setSignal(address, state: state)
     }
 }
 

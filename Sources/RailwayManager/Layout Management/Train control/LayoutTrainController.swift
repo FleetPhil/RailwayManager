@@ -109,7 +109,7 @@ actor LayoutTrainController {
         
         let direction = try trainDirection(train)
 
-        if GlobalOptions.noCBUS {
+        if GlobalOptions.noCBUS || GlobalOptions.noDCC {
             log.verbose("Train \(train) speed is \(speed) \(direction)")
             return
         }
@@ -121,7 +121,7 @@ actor LayoutTrainController {
     }
     
     public func setTrainFunction(train: Train, function: Int, on: Bool) async throws {
-        if GlobalOptions.noCBUS {
+        if GlobalOptions.noCBUS || GlobalOptions.noDCC {
             log.verbose("Train \(train) function \(function) \(on ? "on" : "off")")
             return
         }

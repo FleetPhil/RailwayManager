@@ -8,6 +8,7 @@ struct GlobalOptions {
     // Set once from the command line options at startup, before anything reads them
     nonisolated(unsafe) static var noMQTT: Bool = true
     nonisolated(unsafe) static var noCBUS: Bool = true
+    nonisolated(unsafe) static var noDCC: Bool = true
     nonisolated(unsafe) static var mqttHost: String = "192.168.86.56"
     nonisolated(unsafe) static var mqttPort: Int = 1883
     // Allow test commands (e.g. simulated sensor events) to be entered on stdin
@@ -43,6 +44,10 @@ struct RailwayManager: ParsableCommand {
           help: "Run without the CBUS serial hardware interface")
     var noCBUS = false
     
+    @Flag(name: .customLong("noDCC", withSingleDash: true),
+          help: "Run without the DCC train commands")
+    var noDCC = false
+
     @Option(help: "MQTT broker host")
     var mqttHost: String = ProcessInfo.processInfo.environment["MQTT_HOST"] ?? "192.168.86.56"
     
@@ -56,6 +61,7 @@ struct RailwayManager: ParsableCommand {
         // Apply the options before anything reads them
         GlobalOptions.noMQTT = noMQTT
         GlobalOptions.noCBUS = noCBUS
+        GlobalOptions.noDCC  = noDCC
         GlobalOptions.mqttHost = mqttHost
         GlobalOptions.mqttPort = mqttPort
         
@@ -76,6 +82,11 @@ struct RailwayManager: ParsableCommand {
                     // Start MQTT
                     try await MQTTManager.shared.connect()
                     try await MQTTManager.shared.sendTopolology(fromLayout: layout)
+                    
+                    // Start CBUS
+                    if noCBUS == false {
+                        try CBUSManager.shared.setup()
+                    }
                     
                     return try await RailwayManager.createLayoutManager(layout: layout)
 

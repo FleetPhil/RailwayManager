@@ -59,13 +59,13 @@ class TestTrack2: Layout, @unchecked Sendable {
         block("D").setExit(.reverse, .noExit)
 
         signals = [
-            Signal(id: 1, location: block("A2"), indication: .point(point(51), .single), direction: .forward),
-            Signal(id: 2, location: block("B2"), indication: .point(point(50), .splitStraight), direction: .forward),
-            Signal(id: 3, location: block("C"), indication: .point(point(50), .splitBranch), direction: .forward),
-            Signal(id: 4, location: block("D"), indication: .point(point(52), .splitStraight), direction: .forward),
-            Signal(id: 5, location: block("C"), indication: .point(point(52), .single), direction: .reverse),
-            Signal(id: 6, location: block("A1"), indication: .block(block("A2")), direction: .forward),
-            Signal(id: 7, location: block("B1"), indication: .block(block("B2")), direction: .forward),
+            Signal(id: 1, address: 0, location: block("A2"), indication: .point(point(51), .single), direction: .forward),
+            Signal(id: 2, address: 0, location: block("B2"), indication: .point(point(50), .splitStraight), direction: .forward),
+            Signal(id: 3, address: 0, location: block("C"), indication: .point(point(50), .splitBranch), direction: .forward),
+            Signal(id: 4, address: 0, location: block("D"), indication: .point(point(52), .splitStraight), direction: .forward),
+            Signal(id: 5, address: 0, location: block("C"), indication: .point(point(52), .single), direction: .reverse),
+            Signal(id: 6, address: 0, location: block("A1"), indication: .block(block("A2")), direction: .forward),
+            Signal(id: 7, address: 0, location: block("B1"), indication: .block(block("B2")), direction: .forward),
         ]
             
         // Sensor location start/end relative to the forward direction

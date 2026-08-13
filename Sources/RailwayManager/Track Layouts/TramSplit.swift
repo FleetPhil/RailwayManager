@@ -36,9 +36,9 @@ class TramSplit: Layout, @unchecked Sendable {
         block("C").setExit(.reverse, .point(PointSetting(point: point(51), direction: .splitBranch)))
 
         signals = [
-            Signal(id: 209, location: block("A"), indication: .point(point(51), .single), direction: .forward),
-            Signal(id: 202, location: block("B"), indication: .point(point(51), .splitStraight), direction: .reverse),
-            Signal(id: 201, location: block("C"), indication: .point(point(51), .splitBranch), direction: .reverse),
+            Signal(id: 209, address: 0, location: block("A"), indication: .point(point(51), .single), direction: .forward),
+            Signal(id: 202, address: 0, location: block("B"), indication: .point(point(51), .splitStraight), direction: .reverse),
+            Signal(id: 201, address: 0, location: block("C"), indication: .point(point(51), .splitBranch), direction: .reverse),
         ]
         
         // NB: Location is relative to the forward direction

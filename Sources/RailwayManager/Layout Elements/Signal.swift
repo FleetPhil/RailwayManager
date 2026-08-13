@@ -49,13 +49,13 @@ enum SignalIndication {
 }
 
 final class Signal: CustomStringConvertible, Sendable {
-    internal init(id: Int, location: Block, indication: SignalIndication, direction: Direction) {
+    internal init(id: Int, address: Int, location: Block, indication: SignalIndication, direction: Direction) {
         self.id = id
         self.location = location
         self.indication = indication
         self.direction = direction
         
-        self.hardware = CBUSHardwareSignal(id: id)
+        self.hardware = CBUSHardwareSignal(id: id, address: address)
     }
 
     nonisolated var description: String {

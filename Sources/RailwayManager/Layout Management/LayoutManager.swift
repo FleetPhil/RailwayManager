@@ -54,10 +54,19 @@ actor LayoutManager: Sendable {
                 do {
                     try await self.processEvent(event)
                 } catch {
-                    log.error("Failed to process event \(event): \(error)")
+                    log.warning("Failed to process event \(event): \(error)")
                     // Enter the error state via setState so trains are stopped and LEDs set
-                    try? await self.setState(.error)
+                    // TODO: ignore spurious sensors
+//                    try? await self.setState(.error)
                 }
+            }
+        })
+        
+        // Monitor events
+        backgroundTasks.append(Task {
+            let stream = try! await CBUSManager.shared.CBUSEvents()
+            for await event in stream {
+                await LayoutEventHub.shared.publish(event)
             }
         })
 
@@ -208,7 +217,7 @@ actor LayoutManager: Sendable {
         await trackStateService.trainController.stopAllTrains()
 
         for signal in layout.signals {
-            await trackStateService.setSignalState(signal, .off)
+            try? await trackStateService.setSignalState(signal, .off)
             try? await Task.sleep(for: .milliseconds(100))
         }
         
@@ -305,7 +314,7 @@ actor LayoutManager: Sendable {
             return
         }
         for changedSignal in signalStates {
-            await trackStateService.setSignalState(changedSignal.key, changedSignal.value)
+            try await trackStateService.setSignalState(changedSignal.key, changedSignal.value)
             // Telemetry: a publish failure must not fail the signal update
             try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value)
         }
