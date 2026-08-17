@@ -240,6 +240,12 @@ extension CBUSManager {
     
     // Return a stream of layout events decoded from CBUS
     func CBUSEvents() throws -> AsyncStream<LayoutEvent> {
+        if GlobalOptions.noCBUS {
+            return AsyncStream<LayoutEvent> { continuation in
+                // Never returns anything
+            }
+        }
+        
         let readStream = try serialPort.asyncBytes()
         return AsyncStream<LayoutEvent> { continuation in
             let task = Task {

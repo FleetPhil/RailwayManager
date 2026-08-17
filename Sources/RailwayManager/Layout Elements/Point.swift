@@ -29,9 +29,9 @@ public enum PointDirection: String, Hashable, CustomStringConvertible, Codable, 
     public var description: String {
         switch self {
         case .splitStraight:
-            return "Exit Straight"
+            return "Split Straight"
         case .splitBranch:
-            return "Exit Branch"
+            return "Split Branch"
         case .single:
             return "Single"
         }

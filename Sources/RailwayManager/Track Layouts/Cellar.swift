@@ -29,14 +29,14 @@ class Cellar: Layout, @unchecked Sendable {
             Block(id: "N")
         ]
         points = [
-            Point(id: 1, address: 55, orientation: .left, reversedConnection: true),
-            Point(id: 2, address: 52, orientation: .left),
-            Point(id: 3, address: 50, orientation: .left),
-            Point(id: 4, address: 54, orientation: .right, reversedConnection: true),
+            Point(id: 1, address: 55, orientation: .left, defaultPosition: .splitStraight, reversedConnection: true),
+            Point(id: 2, address: 52, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 3, address: 56, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 4, address: 54, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
             Point(id: 5, address: 59, orientation: .right),
             Point(id: 6, address: 58, orientation: .left),
-            Point(id: 7, address: 51, orientation: .right),
-            Point(id: 8, address: 53, orientation: .right, reversedConnection: true),
+            Point(id: 7, address: 51, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
+            Point(id: 8, address: 53, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
             Point(id: 9, address: 50, orientation: .right),
         ]
         
@@ -104,16 +104,16 @@ class Cellar: Layout, @unchecked Sendable {
 
         signals = [
             Signal(id: 1, address: 0, location: block("A"), indication: .point(point(7), .splitStraight), direction: .reverse),
-            Signal(id: 2, address: 211, location: block("A"), indication: .point(point(3), .splitStraight), direction: .forward),
-            Signal(id: 3, address: 212, location: block("B"), indication: .point(point(8), .single), direction: .reverse),
+            Signal(id: 2, address: 215, location: block("A"), indication: .point(point(3), .splitStraight), direction: .forward),
+//            Signal(id: 3, address: 0, location: block("B"), indication: .point(point(8), .single), direction: .reverse),
             Signal(id: 4, address: 217, location: block("B"), indication: .point(point(1), .splitStraight), direction: .forward),
-            Signal(id: 6, address: 0, location: block("C"), indication: .point(point(1), .splitBranch), direction: .forward),
+            Signal(id: 6, address: 211, location: block("C"), indication: .point(point(1), .splitBranch), direction: .forward),
             Signal(id: 7, address: 0, location: block("D"), indication: .point(point(3), .single), direction: .reverse),
-            Signal(id: 8, address: 0, location: block("D"), indication: .point(point(4), .single), direction: .forward),
+            Signal(id: 8, address: 212, location: block("D"), indication: .point(point(4), .single), direction: .forward),
             Signal(id: 9, address: 0, location: block("E"), indication: .point(point(2), .splitStraight), direction: .reverse),
-            Signal(id: 10, address: 215, location: block("E"), indication: .block(block("G")), direction: .forward),
+            Signal(id: 10, address: 0, location: block("E"), indication: .block(block("G")), direction: .forward),
             Signal(id: 11, address: 0, location: block("G"), indication: .block(block("E")), direction: .reverse),
-            Signal(id: 12, address: 216, location: block("G"), indication: .point(point(8), .splitStraight), direction: .forward),
+            Signal(id: 12, address: 218, location: block("G"), indication: .point(point(8), .splitStraight), direction: .forward),
             Signal(id: 13, address: 0, location: block("H"), indication: .point(point(5), .splitStraight), direction: .reverse),
             Signal(id: 14, address: 213, location: block("H"), indication: .point(point(6), .splitStraight), direction: .forward),
             Signal(id: 15, address: 0, location: block("J"), indication: .point(point(5), .splitBranch), direction: .reverse),
@@ -121,15 +121,13 @@ class Cellar: Layout, @unchecked Sendable {
             Signal(id: 17, address: 0, location: block("K"), indication: .point(point(6), .single), direction: .reverse),
             Signal(id: 18, address: 214, location: block("K"), indication: .point(point(7), .single), direction: .forward),
             Signal(id: 19, address: 0, location: block("L"), indication: .point(point(5), .splitBranch), direction: .reverse),
-            Signal(id: 20, address: 218, location: block("L"), indication: .point(point(9), .single), direction: .forward),
+            Signal(id: 20, address: 0, location: block("L"), indication: .point(point(9), .single), direction: .forward),
             Signal(id: 21, address: 0, location: block("M"), indication: .point(point(9), .splitStraight), direction: .reverse),
             Signal(id: 23, address: 0, location: block("N"), indication: .point(point(9), .splitBranch), direction: .reverse),
         ]
             
         // Sensor location start/end relative to the forward direction
         sensors = [
-            
-            
             Sensor(id: 1, location: .start(block("A"), 10)),
             Sensor(id: 2, location: .end(block("A"), 10)),
 

@@ -318,15 +318,13 @@ actor LayoutTrackStateService {
         }
         
         for point in item.pointSettings.map( \.point ) {
-            log.verbose("Point \(point) set to reserved \(forTrain)")
-            
             try await setReservedTrainForPoint(point, to: forTrain, associatedStartBlock: item.fromBlock)
         }
         // MARK: End critical section
         
         // Command the point hardware
         for pointSetting in item.pointSettings {
-            try await pointSetting.point.setDirection(pointSetting.direction)
+            try await setDirectionForPoint(pointSetting.point, newDirection: pointSetting.direction)
         }
         
         // Telemetry: a publish failure must not fail the reservation
