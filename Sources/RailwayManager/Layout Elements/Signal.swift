@@ -9,19 +9,19 @@ import Foundation
 
 // Signal state raw values also set in SIGSENS module
 public enum SignalState: UInt8, Sendable, CustomStringConvertible, Codable, CaseIterable {
-    case off        = 0
-    case stop       = 1
-    case go         = 3
-    case right      = 4
-    case left       = 5
+    case off            = 0
+    case stop           = 1
+    case go             = 3
+    case right          = 4
+    case left           = 5
     
     public nonisolated var description: String {
         switch self {
-        case .off:      "off"
-        case .stop:     "stop"
-        case .go:       "go"
-        case .right:    "right"
-        case .left:     "left"
+        case .off:          "off"
+        case .stop:         "stop"
+        case .go:           "go"
+        case .right:        "right"
+        case .left:         "left"
         }
     }
 }
