@@ -47,7 +47,7 @@ struct PointRuntimeState: CustomStringConvertible, Sendable, Equatable {
 actor LayoutTrackStateService {
     private var blockStates: [Block: BlockRuntimeState] = [:]
     private var pointStates: [Point : PointRuntimeState] = [:]
-    private var signalStates: [Signal : SignalState] = [:]
+    private var signalStates: [Signal : (SignalState, SignalState)] = [:]
     
     let trainController = LayoutTrainController()
     
@@ -75,7 +75,7 @@ actor LayoutTrackStateService {
         }
         
         signalStates = layout.signals.reduce(into: [:], { result, signal in
-            result[signal] = .init(.off)
+            result[signal] = .init((.off, .off))
         })
         
         // Send MQTT updates
@@ -97,14 +97,14 @@ actor LayoutTrackStateService {
 
     }
 
-    func signalState(_ signal: Signal) -> SignalState {
-        signalStates[signal] ?? .off
+    func signalState(_ signal: Signal) -> (SignalState, SignalState) {
+        return signalStates[signal] ?? (.off, .off)
     }
     
-    func setSignalState(_ signal: Signal, _ state: SignalState) async throws {
-        log.verbose("Signal \(signal) changed from \(signalStates[signal] ?? .off) to \(state)")
-        try await signal.setState(state)
-        signalStates[signal] = state
+    func setSignalState(_ signal: Signal, home: SignalState, distant: SignalState?) async throws {
+        log.verbose("Signal \(signal) changed from \(signalStates[signal] ?? (.off, .off)) to \(home), \(distant ?? .off)")
+        try await signal.setState(home: home, distant: distant ?? .off)
+        signalStates[signal] = (home, distant ?? .off)
     }
 
     func blockState(_ block: Block) -> BlockRuntimeState? {
@@ -488,7 +488,7 @@ struct LayoutTrackSnapshot: Sendable {
                   trainDirections: [Train : Direction],
                   blockStates: [Block : BlockRuntimeState],
                   directionLocks: [Block: [Train]],
-                  signalStates: [Signal : SignalState],
+                  signalStates: [Signal : (SignalState, SignalState)],
                   pointStates: [ Point : PointRuntimeState]) {
         self.blockStates = blockStates
         self.trainStates = trainStates
@@ -502,7 +502,7 @@ struct LayoutTrackSnapshot: Sendable {
     private let directionLocks: [Block: [Train]]
     private let trainStates: [Train: TrainRuntimeState]
     private let trainDirections: [Train: Direction]
-    private let signalStates: [Signal : SignalState]
+    private let signalStates: [Signal : (SignalState, SignalState)]
     private let pointStates: [ Point : PointRuntimeState]
 
     var allBlocks: [Block] { Array(blockStates.keys) }
@@ -513,7 +513,7 @@ struct LayoutTrackSnapshot: Sendable {
     func blockState(_ block: Block) -> BlockRuntimeState? { blockStates[block] }
     func directionLocks(_ block: Block) -> [Train]? { directionLocks[block] }
     func trainState(_ train: Train) -> TrainRuntimeState? { trainStates[train] }
-    func signalState(_ signal: Signal) -> SignalState? { signalStates[signal] }
+    func signalState(_ signal: Signal) -> (SignalState, SignalState)? { signalStates[signal] }
     func pointState(_ point: Point) -> PointRuntimeState? { pointStates[point] }
 
     func reservedTrainForPoint(_ point: Point) -> Train? {

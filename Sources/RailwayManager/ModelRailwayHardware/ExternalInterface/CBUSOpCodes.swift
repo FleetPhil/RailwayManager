@@ -12,6 +12,7 @@ enum OpCode: UInt8 {
     case ASOF       = 0x99
     case ASOF1      = 0xB9
     case ASOF2      = 0xD9
+    case ASOF3      = 0xF9
     case ASON1      = 0xB8
     case ASON2      = 0xD8
     case ASON3      = 0xF8
@@ -50,6 +51,7 @@ enum OpCode: UInt8 {
         case .ASOF:     "ASOF"
         case .ASOF1:    "ASOF1"
         case .ASOF2:    "ASOF2"
+        case .ASOF3:    "ASOF3"
         case .ASON1:    "ASON1"
         case .ASON2:    "ASON2"
         case .ASON3:    "ASON3"
@@ -85,8 +87,9 @@ enum OpCode: UInt8 {
         case .ASON:     0
         case .ASOF:     0
         case .ASOF1:    1
-        case .ASOF2:    1
-        case .ASON1:    2
+        case .ASOF2:    2
+        case .ASOF3:    3
+        case .ASON1:    1
         case .ASON2:    2
         case .ASON3:    3
         default:        0

@@ -76,6 +76,7 @@ struct CBUSMessage {
             case .ASOF:     CBUSMessage(opCode: .ASOF, device: Int(m[3]) * 256 + Int(m[4]))
             case .ASOF1:    CBUSMessage(opCode: .ASOF1, device: Int(m[3]) * 256 + Int(m[4]), dataBytes: [m[5]])
             case .ASOF2:    CBUSMessage(opCode: .ASOF2, device: Int(m[3]) * 256 + Int(m[4]), dataBytes: [m[5], m[6]])
+            case .ASOF3:    CBUSMessage(opCode: .ASOF3, device: Int(m[3]) * 256 + Int(m[4]), dataBytes: [m[5], m[6], m[7]])
 
             case .ARST:     CBUSMessage(opCode: .ARST)
             case .RLOC:     CBUSMessage(opCode: .ASON, address: Int(m[1]))

@@ -60,10 +60,6 @@ actor CBUSManager: Sendable {
                 baudRateSetting: .symmetrical(.baud115200),
                 minimumBytesToRead: 1)
         }
-        
-        try setSignal(211, state: .stop)
-        log.debug("Signal 211 to red")
-
     }
     
     func setPoint(_ id: Int, direction: PointDirection) throws {
@@ -75,6 +71,15 @@ actor CBUSManager: Sendable {
         try setPoint(id, direction: oppositeDirection)
         try await Task.sleep(for: .milliseconds(200))
         try setPoint(id, direction: toDirection)
+    }
+    
+    func setSignal(_ address: Int, homeState: SignalState, distantState: SignalState) throws {
+        if address == 0 { return }          // Dummy device
+        if homeState == .off {
+            try sendCBUSMessage(CBUSMessage(opCode: .ASOF, device: address))
+        } else {
+            try sendCBUSMessage(CBUSMessage(opCode: .ASON2, device: address, dataBytes: [homeState.rawValue, distantState.rawValue]))
+        }
     }
     
     func setSignal(_ address: Int, state: SignalState) throws {
@@ -157,9 +162,9 @@ extension CBUSManager {
                 data += String(format: "%08X", message.device!)
                 
                 // Add the correct number of data bytes for the OpCode
-                if message.opCode.dataByteCount > 1 { data += message.dataBytes[0].hexStr }
-                if message.opCode.dataByteCount > 2 { data += message.dataBytes[1].hexStr }
-                if message.opCode.dataByteCount > 3 { data += message.dataBytes[2].hexStr }
+                if message.opCode.dataByteCount > 0 { data += message.dataBytes[0].hexStr }
+                if message.opCode.dataByteCount > 1 { data += message.dataBytes[1].hexStr }
+                if message.opCode.dataByteCount > 2 { data += message.dataBytes[2].hexStr }
                 return data
                 
             case .DKEEP:
@@ -362,6 +367,13 @@ extension CBUSManager {
             let statString = statStrings.compactMap({ $0 }).joined(separator: ", ")
             
             print("*** Received stats: \(statString)")
+            return nil
+            
+        case .ASOF3:        // Sensor unset stats
+            let deviceID = Int(message[3]) * 256 + Int(message[4])
+            var s: String = "Sensor \(deviceID) unset: "
+            s.append(" \(Int(message[5])) readings, max: \(Int(message[6]) * 10), min: \(Int(message[7]) * 10)")
+            log.debug(s)
             return nil
             
         default:

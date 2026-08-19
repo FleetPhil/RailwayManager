@@ -12,7 +12,7 @@ import Foundation
 public typealias SignalID = Int
 
 public protocol HardwareSignal: Sendable {
-    func setState(_ state: SignalState) async throws
+    func setState(home: SignalState, distant: SignalState) async throws
 }
 
 final public class CBUSHardwareSignal: HardwareSignal, CustomStringConvertible, Sendable {
@@ -28,8 +28,8 @@ final public class CBUSHardwareSignal: HardwareSignal, CustomStringConvertible, 
     let id: Int                 // Logical layout ID
     let address: Int            // CBUS address
     
-    public func setState(_ state: SignalState) async throws {
-        try await CBUSManager.shared.setSignal(address, state: state)
+    public func setState(home: SignalState, distant: SignalState) async throws {
+        try await CBUSManager.shared.setSignal(address, homeState: home, distantState: distant)
     }
 }
 

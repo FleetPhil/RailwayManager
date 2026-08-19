@@ -28,7 +28,7 @@ extension LayoutTrackStateService {
         
         let signalStates = snapshot.allSignals
             .sorted(by: { $0.id < $1.id })
-            .filter({ snapshot.signalState($0) != .stop })
+            .filter({ snapshot.signalState($0)! != (.stop, .stop) })
             .map({ signal in
                 "\(signal.id): \(snapshot.signalState(signal)!)"
             })

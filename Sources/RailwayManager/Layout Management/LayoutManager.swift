@@ -96,7 +96,7 @@ actor LayoutManager: Sendable {
                     if layoutState != .dormant {
                         try await updateSignals()
                     }
-                    try await Task.sleep(for: .seconds(0.2))
+                    try await Task.sleep(for: .seconds(0.25))
                 } catch is CancellationError {
                     break
                 } catch {
@@ -217,7 +217,7 @@ actor LayoutManager: Sendable {
         await trackStateService.trainController.stopAllTrains()
 
         for signal in layout.signals {
-            try? await trackStateService.setSignalState(signal, .off)
+            try? await trackStateService.setSignalState(signal, home: .off, distant: .off)
             try? await Task.sleep(for: .milliseconds(100))
         }
         
@@ -314,9 +314,11 @@ actor LayoutManager: Sendable {
             return
         }
         for changedSignal in signalStates {
-            try await trackStateService.setSignalState(changedSignal.key, changedSignal.value)
+            try await trackStateService.setSignalState(changedSignal.key,
+                                                       home: changedSignal.value.0,
+                                                       distant: changedSignal.value.1)
             // Telemetry: a publish failure must not fail the signal update
-            try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value)
+            try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value.0)
         }
     }
 }

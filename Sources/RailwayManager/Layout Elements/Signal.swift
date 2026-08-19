@@ -11,28 +11,17 @@ import Foundation
 public enum SignalState: UInt8, Sendable, CustomStringConvertible, Codable, CaseIterable {
     case off        = 0
     case stop       = 1
-    case caution    = 2
     case go         = 3
-    case opposed    = 9            // Train direction opposes signal direction
     case right      = 4
     case left       = 5
     
     public nonisolated var description: String {
         switch self {
-        case .off:
-            "off"
-        case .stop:
-            "stop"
-        case .caution:
-            "caution"
-        case .go:
-            "go"
-        case .opposed:
-            "opposed"
-        case .right:
-            "right"
-        case .left:
-            "left"
+        case .off:      "off"
+        case .stop:     "stop"
+        case .go:       "go"
+        case .right:    "right"
+        case .left:     "left"
         }
     }
 }
@@ -68,8 +57,8 @@ final class Signal: CustomStringConvertible, Sendable {
     let direction: Direction
     let indication: SignalIndication        // What the signal status refers to
     
-    public func setState(_ state: SignalState) async throws {
-        try await hardware.setState(state)
+    public func setState(home: SignalState, distant: SignalState) async throws {
+        try await hardware.setState(home: home, distant: distant)
     }
 }
 
