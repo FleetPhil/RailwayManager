@@ -14,11 +14,11 @@ extension RailwayManager {
         let path1 = try layout.path(fromBlock: layout.block("C"),
                                     toBlock: layout.block("A"),
                                     direction: .forward)
-        let segment1 = Segment(path: path1, waitTime: nil)
-//        let path2 = try layout.path(fromBlock: layout.block("B"),
-//                                    toBlock: layout.block("N"),
-//                                    direction: .forward)
-//        let segment2 = Segment(path: path2, waitTime: .station)
+        let segment1 = Segment(path: path1, waitTime: .halt)
+        let path2 = try layout.path(fromBlock: layout.block("A"),
+                                    toBlock: layout.block("N"),
+                                    direction: .forward)
+        let segment2 = Segment(path: path2, waitTime: .station)
         let route1 = Route(id: 1, segments: [segment1])
         
         return route1

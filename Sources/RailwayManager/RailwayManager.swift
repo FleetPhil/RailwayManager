@@ -120,7 +120,7 @@ struct RailwayManager: ParsableCommand {
         
         do {
             let route = try await setupRoutes(layoutManager: layoutManager)
-            let sbb = Trains.sbb
+            let sbb = Trains.trains.first!
             try await layoutManager.runRoute(route: route, train: sbb)
             
             // Start task to process test commands if on macOS

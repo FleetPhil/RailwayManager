@@ -8,13 +8,14 @@
 import Foundation
 
 struct Trains {
-    static var sbb: Train {
+    static var trainParams: [TrainParams] {
+        var trainID = 1
         var sbbSpeeds: [ TrainSpeed : TrainSpeedSetting ] {
             [
-            .stop :     TrainSpeedSetting(power: 0, speed: 0),
-            .slow :     TrainSpeedSetting(power: 12, speed: 12),
-            .normal :   TrainSpeedSetting(power: 20, speed: 20),
-            .fast :     TrainSpeedSetting(power: 40, speed: 40),
+                .stop :     TrainSpeedSetting(power: 0, speed: 0),
+                .slow :     TrainSpeedSetting(power: 12, speed: 12),
+                .normal :   TrainSpeedSetting(power: 20, speed: 20),
+                .fast :     TrainSpeedSetting(power: 40, speed: 40),
             ]
         }
         
@@ -25,7 +26,10 @@ struct Trains {
             ]
         }
         
-        let sbbParams = TrainParams(id: 1, name: "SBB Re430", address: 20, trainSpeeds: sbbSpeeds, startFunctions: sbbStartFunctions)
-        return Train(trainParams: sbbParams)
+        return [TrainParams(id: trainID, name: "SBB Re430", address: 20, trainSpeeds: sbbSpeeds, startFunctions: sbbStartFunctions)]
+    }
+     
+    static var trains: [Train] {
+        return trainParams.map { Train(trainParams: $0) }
     }
 }
