@@ -24,6 +24,38 @@ enum WaitTime: Sendable, Equatable {
     }
 }
 
+// Coded as a plain string ("halt", "station", "terminus") or a number of seconds for a fixed wait
+extension WaitTime: Codable {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        
+        if let seconds = try? container.decode(TimeInterval.self) {
+            self = .fixed(seconds)
+            return
+        }
+        
+        switch try container.decode(String.self) {
+        case "halt":        self = .halt
+        case "station":     self = .station
+        case "terminus":    self = .terminus
+        case let unknown:
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown wait time '\(unknown)' (expected halt, station, terminus or a number of seconds)")
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .fixed(let seconds):   try container.encode(seconds)
+        case .halt:                 try container.encode("halt")
+        case .station:              try container.encode("station")
+        case .terminus:             try container.encode("terminus")
+        }
+    }
+}
+
 // A segment is a runtime wrapper for a path indicating any runtime parameters
 
 struct Segment: Sendable {

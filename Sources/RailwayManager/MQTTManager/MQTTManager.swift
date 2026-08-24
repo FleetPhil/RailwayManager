@@ -39,6 +39,7 @@ actor MQTTManager: Sendable {
     private let topic = "railway"
     private let stateTopic = "/state"
     private let layoutTopic = "/topology"
+    private let routeTopic = "/route"
 
     private init() {
         // Broker location is set from the command line options (or their env/default values)
@@ -189,6 +190,47 @@ actor MQTTManager: Sendable {
         }
     }
     
+    // Subscribe to the route topic and return a stream of the route requests received on it
+    // Invalid payloads are logged and skipped; returns nil if MQTT is disabled
+    func routeRequests() async throws -> AsyncStream<RouteParams>? {
+        guard GlobalOptions.noMQTT == false, let client else { return nil }
+        
+        let routeTopicName = topic + routeTopic
+        _ = try await client.subscribe(to: [MQTTSubscribeInfo(topicFilter: routeTopicName, qos: .atLeastOnce)])
+        
+        let listener = client.createPublishListener()
+        let (stream, continuation) = AsyncStream.makeStream(of: RouteParams.self)
+        
+        let task = Task {
+            for await result in listener {
+                switch result {
+                case .success(let publish):
+                    guard publish.topicName == routeTopicName else { continue }
+                    
+                    guard let payload = publish.payload.getString(at: publish.payload.readerIndex,
+                                                                  length: publish.payload.readableBytes),
+                          let data = payload.data(using: .utf8) else {
+                        log.error("Ignored route request with unreadable payload")
+                        continue
+                    }
+                    
+                    do {
+                        continuation.yield(try JSONDecoder().decode(RouteParams.self, from: data))
+                    } catch {
+                        log.error("Ignored invalid route request: \(error)")
+                    }
+                    
+                case .failure(let error):
+                    log.error("MQTT route listener error: \(error)")
+                }
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        
+        return stream
+    }
+    
     private func handleJSONError(_ error: Error) {
         switch error {
         case EncodingError.invalidValue(let value, let context):
@@ -201,6 +243,21 @@ actor MQTTManager: Sendable {
 }
 
 extension MQTTManager {
+    // Raw route data received over MQTT: the train to run and the Layout.path()
+    // parameters for each segment of the route
+    struct RouteParams: Codable, Sendable {
+        struct SegmentParams: Codable, Sendable {
+            var fromBlock: String
+            var toBlock: String
+            var direction: Direction
+            var waitTime: WaitTime?         // No stop at segment end if nil
+        }
+        
+        var routeID: Int
+        var trainID: Int
+        var segments: [SegmentParams]
+    }
+    
     struct BlockTopology: Codable {
         var forwardEndSignal: Int?   // Signal at block end in the forward direction
         var reverseEndSignal: Int?   // Signal at block end in the reverse direction

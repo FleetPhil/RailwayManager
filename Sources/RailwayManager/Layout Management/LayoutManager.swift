@@ -126,8 +126,7 @@ actor LayoutManager: Sendable {
 
     func runRoute(route: Route, train: Train) async throws {
         guard routeOperators[train] == nil else {
-            log.error("Train \(train) already active - ignored")
-            return
+            throw TrainError.trainAlreadyActive(train.id)
         }
         
         log.info("Route \(route.id) running with train \(train.name)")

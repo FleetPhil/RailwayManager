@@ -24,6 +24,7 @@ enum TrainError: Error, Equatable {
     case CBUSError(String)
     case MQTTConnectFail
     case noDCCSession(Int)
+    case trainAlreadyActive(Int)
     
     var isFatal: Bool {
         switch self {
@@ -43,6 +44,7 @@ enum TrainError: Error, Equatable {
         case .CBUSError:                    true
         case .MQTTConnectFail:              true
         case .noDCCSession:                 true
+        case .trainAlreadyActive:           false
         }
     }
 }

@@ -119,9 +119,15 @@ struct RailwayManager: ParsableCommand {
 #endif
         
         do {
-            let route = try await setupRoutes(layoutManager: layoutManager)
-            let sbb = Trains.trains.first!
-            try await layoutManager.runRoute(route: route, train: sbb)
+            if GlobalOptions.noMQTT {
+                // No route source without MQTT: run the hardcoded test route
+                let route = try await setupRoutes(layoutManager: layoutManager)
+                let sbb = Trains.trains.first!
+                try await layoutManager.runRoute(route: route, train: sbb)
+            } else {
+                // Run routes as they are requested over MQTT
+                monitorRouteRequests(layoutManager: layoutManager)
+            }
             
             // Start task to process test commands if on macOS
             while GlobalOptions.consoleTestCommands {
@@ -154,6 +160,55 @@ struct RailwayManager: ParsableCommand {
         log.info("Layout is valid: \(layout.layoutIsValid())")
         
         return try await LayoutManager(layout: layout)
+    }
+    
+    // Monitor route requests received over MQTT and run each valid one
+    // A rejected route is logged and monitoring continues
+    static func monitorRouteRequests(layoutManager: LayoutManager) {
+        Task {
+            do {
+                guard let requests = try await MQTTManager.shared.routeRequests() else { return }
+                
+                for await routeParams in requests {
+                    do {
+                        try await runRoute(from: routeParams, layoutManager: layoutManager)
+                    } catch {
+                        log.error("Route request \(routeParams.routeID) rejected: \(error)")
+                    }
+                }
+            } catch {
+                log.error("Route request monitoring failed: \(error)")
+            }
+        }
+    }
+    
+    // Validate raw route parameters and run the resulting route
+    // Throws if the train is unknown or already active, or the route is not valid on the layout
+    static func runRoute(from routeParams: MQTTManager.RouteParams, layoutManager: LayoutManager) async throws {
+        let layout = layoutManager.layout
+        
+        guard let train = Trains.trains.first(where: { $0.id == routeParams.trainID }) else {
+            throw TrainError.applicationError("Unknown train \(routeParams.trainID) for route \(routeParams.routeID)")
+        }
+        
+        guard routeParams.segments.isEmpty == false else {
+            throw TrainError.invalidRoute(routeParams.routeID)
+        }
+        
+        var segments: [Segment] = []
+        for segmentParams in routeParams.segments {
+            guard layout.hasBlock(segmentParams.fromBlock), layout.hasBlock(segmentParams.toBlock) else {
+                throw TrainError.invalidPath("Unknown block in segment \(segmentParams.fromBlock)-\(segmentParams.toBlock) of route \(routeParams.routeID)")
+            }
+            
+            // path() throws if the blocks are not connected in the given direction
+            let path = try layout.path(fromBlock: layout.block(segmentParams.fromBlock),
+                                       toBlock: layout.block(segmentParams.toBlock),
+                                       direction: segmentParams.direction)
+            segments.append(Segment(path: path, waitTime: segmentParams.waitTime))
+        }
+        
+        try await layoutManager.runRoute(route: Route(id: routeParams.routeID, segments: segments), train: train)
     }
     
     static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {

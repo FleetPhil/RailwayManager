@@ -81,6 +81,10 @@ extension Layout {
         return layoutGraph
     }
     
+    func blockRoutes(direction: Direction) -> [BlockRoute] {
+        
+    }
+    
     // return all of the block to block point settings
     func makeBlockRoutes() -> [BlockRoute] {
         var blockRoutes: [BlockRoute] = []
@@ -354,6 +358,18 @@ extension Layout {
             }
         }
         
+        // Check that no block route sets the same point more than once
+        for blockRoute in blockRoutes {
+            let duplicatedPoints = Dictionary(grouping: blockRoute.pointSettings, by: \.point)
+                .filter { $0.value.count > 1 }
+            
+            if duplicatedPoints.isEmpty == false {
+                for point in duplicatedPoints.keys {
+                    log.error("Block route \(blockRoute.fromBlock)-\(blockRoute.toBlock) (\(blockRoute.direction)) sets point \(point.id) more than once")
+                }
+                return false
+            }
+        }
         
         return true
     }
