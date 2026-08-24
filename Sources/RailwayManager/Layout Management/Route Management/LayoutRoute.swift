@@ -81,53 +81,72 @@ extension Layout {
         return layoutGraph
     }
     
-    func blockRoutes(direction: Direction) -> [BlockRoute] {
-        
-    }
-    
-    // return all of the block to block point settings
     func makeBlockRoutes() -> [BlockRoute] {
-        var blockRoutes: [BlockRoute] = []
-        
-        for direction: Direction in [.forward, .reverse] {
-            for block in self.blocks {
-                var forwardNextBlocks = nextBlocksFromResource(.block(block, direction))
-                
-                var index = 0
-                var pointSettings: [PointSetting] = []
-                
-                while forwardNextBlocks.count > index {     // Could be a hanging point as the first entry
-                    switch forwardNextBlocks[index] {
-                    case .block(let endBlock, _):
-                        // End of path - create route
-                        let blockRoute = BlockRoute(fromBlock: block, toBlock: endBlock, direction: direction, pointSettings: pointSettings)
-                        blockRoutes.append(blockRoute)
-                        
-                        // Remove this block end
-                        forwardNextBlocks.remove(at: index)
-                        // Remove previous entry if it exists (must be a point if so)
-                        if index > 0 {
-                            forwardNextBlocks.remove(at: index - 1)
-                        }
-                        
-                        // Loop to start next path
-                        index = 0
-                        pointSettings.removeAll()
-                        
-                    case .point(let point, let pointDirection):
-                        // Add the point setting to the list for the route (ignore single)
-                        if pointDirection != .single {
-                            pointSettings.append(PointSetting(point: point, direction: pointDirection))
-                        }
-                        index += 1
+        var routes: [BlockRoute] = []
+
+        for block in blocks {
+            for direction in Direction.allCases {
+                guard let exit = block.blockExit[direction] else { continue }
+                switch exit {
+                case .unknown, .noExit:
+                    break
+                case .block(let toBlock):
+                    routes.append(BlockRoute(fromBlock: block, toBlock: toBlock,
+                                             direction: direction, pointSettings: []))
+                case .point(let pointSetting):
+                    let paths = traversePointChain(entering: pointSetting.point,
+                                                   from: pointSetting.direction,
+                                                   accumulated: [],
+                                                   visited: [])
+                    for (toBlock, settings) in paths {
+                        routes.append(BlockRoute(fromBlock: block, toBlock: toBlock,
+                                                 direction: direction, pointSettings: settings))
                     }
                 }
             }
         }
-        
-        return blockRoutes
+
+        return routes
     }
 
+    // Returns all reachable (block, [PointSetting]) pairs from the given point entry.
+    // `from` is the leg of the point we enter from.
+    // Facing entry (.single) branches into both split options; trailing entry exits to .single.
+    private func traversePointChain(entering point: Point, from entryDirection: PointDirection,
+                                    accumulated: [PointSetting], visited: Set<Int>) -> [(Block, [PointSetting])] {
+        guard !visited.contains(point.id) else { return [] }
+        var visited = visited
+        visited.insert(point.id)
+
+        var exits: [(PointDirection, PointConnection)] = []
+
+        if entryDirection == .single {
+            // Facing movement — enumerate both branch options
+            for branch in [PointDirection.splitStraight, PointDirection.splitBranch] {
+                if let connection = point.connections[branch] {
+                    exits.append((branch, connection))
+                }
+            }
+        } else {
+            // Trailing movement — exit forced to .single
+            if let connection = point.connections[.single] {
+                exits.append((entryDirection, connection))
+            }
+        }
+
+        var results: [(Block, [PointSetting])] = []
+        for (settingDirection, connection) in exits {
+            let settings = accumulated + [PointSetting(point: point, direction: settingDirection)]
+            switch connection {
+            case .block(let nextBlock):
+                results.append((nextBlock, settings))
+            case .point(let nextPoint, let nextEntryDirection):
+                results += traversePointChain(entering: nextPoint, from: nextEntryDirection,
+                                              accumulated: settings, visited: visited)
+            }
+        }
+        return results
+    }
 
     // The direction attributes for a track resource used to identify the next connection
     private enum TrackResourceDirection: CustomStringConvertible {
@@ -171,52 +190,6 @@ extension Layout {
         }
     }
 
-    // Return the resources after this one from the given direction until a block is reached
-    private func nextBlocksFromResource(_ resourceDirection: TrackResourceDirection, resources: [TrackResourceDirection] = []) -> [TrackResourceDirection] {
-        
-        var newResources = resources
-        
-        if let point = resourceDirection.point {
-            if resourceDirection.pointDirection! != .single {
-                newResources += [.point(point, resourceDirection.pointDirection!)]
-            }
-            switch point.connections[resourceDirection.pointDirection!] {
-            case .block(let block):         return newResources + [.block(block, nil)]
-            case .point(let nextPoint, let pointDirection):
-                newResources += [.point(nextPoint, pointDirection)]
-                let exits: [PointDirection] = pointDirection == .single ? [.splitStraight, .splitBranch] : [.single]
-                for exit in exits {
-                    newResources += nextBlocksFromResource(.point(nextPoint, exit))
-                }
-                return newResources
-            default:
-                return resources
-            }
-        }
-            
-        if let block = resourceDirection.block {
-            switch block.blockExit[resourceDirection.blockDirection!] {
-            case .block(let nextBlock):     // Exit is another block so just add to the result array
-                return newResources + [.block(nextBlock, resourceDirection.blockDirection!)]
-            case .point(let pointSetting):  // Iterate through the exits from the next point
-                let exits: [PointDirection] = pointSetting.direction == .single ? [.splitStraight, .splitBranch] : [.single]
-                for exit in exits {
-                    if pointSetting.direction != .single {
-                        newResources += [.point(pointSetting.point, pointSetting.direction)]
-                    }
-
-                    newResources += nextBlocksFromResource(.point(pointSetting.point, exit))
-                }
-                return newResources
-
-            default:
-                return resources       // No additional blocks
-            }
-        }
-        
-        return resources
-    }
-    
     
 }
 

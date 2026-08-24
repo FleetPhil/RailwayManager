@@ -157,8 +157,9 @@ struct RailwayManager: ParsableCommand {
     }
     
     static func createLayoutManager(layout: Layout) async throws -> LayoutManager {
-        log.info("Layout is valid: \(layout.layoutIsValid())")
-        
+        guard layout.layoutIsValid() else {
+            fatalError("Layout is invalid — check logs for details")
+        }
         return try await LayoutManager(layout: layout)
     }
     
