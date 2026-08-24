@@ -74,6 +74,10 @@ actor RouteOperator {
         route.segments[currentItemIndex.segmentIndex]
     }
     
+    private var currentSegmentIsLast: Bool {
+        currentItemIndex.segmentIndex == route.segments.count - 1
+    }
+    
     private var currentWaitTime: WaitTime? {
         currentSegment.waitTime
     }
@@ -308,6 +312,7 @@ actor RouteOperator {
         
         // If this is the placeholder first item just execute the first command
         if isFirstPathItem {
+            lastCommandedTrainSpeed = .normal
             try await processNextPathItem()
             return
         }
@@ -320,16 +325,16 @@ actor RouteOperator {
             // Slow down for the wait
             try await slowForEndSensor { .stoppingForTimer($0, waitTime) }
             
+            // If this is also the last segment set the route state
+            if currentSegmentIsLast {
+                routeState = .ending
+            }
+            
             // No more processing for now
             return
         }
         
         try await processNextPathItem()
-        
-        if routeState == .ending {
-            // Slow down for the end sensor
-            try await slowForEndSensor { .stoppingAtSensor($0, 0) }
-        }
     }
     
     // Slow the train for the end sensor of the current toBlock, moving to the given state
