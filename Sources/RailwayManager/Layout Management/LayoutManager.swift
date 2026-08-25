@@ -30,6 +30,7 @@ actor LayoutManager: Sendable {
     
     // Signal coordinator
     private let signalCoordinator: SignalCoordinator
+    static let signalRefreshInterval: TimeInterval = 0.2
     
     // DCC Item States
     private let keepAliveInterval: TimeInterval = 3.0
@@ -94,9 +95,9 @@ actor LayoutManager: Sendable {
             while !Task.isCancelled {
                 do {
                     if layoutState != .dormant {
-                        try await updateSignals()
+                        try await trackStateService.updateSignals()
                     }
-                    try await Task.sleep(for: .seconds(0.25))
+                    try await Task.sleep(for: .seconds(LayoutManager.signalRefreshInterval))
                 } catch is CancellationError {
                     break
                 } catch {
@@ -306,20 +307,6 @@ actor LayoutManager: Sendable {
         }
     }
     
-    private func updateSignals() async throws {
-        let snapshot = await trackStateService.snapshot()
-        guard let signalStates = try SignalCoordinator.refresh(snapshot: snapshot, layoutState: layoutState) else {
-            // Layout not active
-            return
-        }
-        for changedSignal in signalStates {
-            try await trackStateService.setSignalState(changedSignal.key,
-                                                       home: changedSignal.value.0,
-                                                       distant: changedSignal.value.1)
-            // Telemetry: a publish failure must not fail the signal update
-            try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value.0)
-        }
-    }
 }
 
 extension LayoutManager {

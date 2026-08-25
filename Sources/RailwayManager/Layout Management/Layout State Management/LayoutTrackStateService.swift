@@ -97,7 +97,9 @@ actor LayoutTrackStateService {
 
     }
 
-    func signalState(_ signal: Signal) -> (SignalState, SignalState) {
+    func signalState(_ signal: Signal) async throws -> (SignalState, SignalState) {
+        // Force a refresh
+        try await updateSignals()
         return signalStates[signal] ?? (.off, .off)
     }
     
@@ -105,6 +107,21 @@ actor LayoutTrackStateService {
         log.verbose("Signal \(signal) changed from \(signalStates[signal] ?? (.off, .off)) to \(home), \(distant ?? .off)")
         try await signal.setState(home: home, distant: distant ?? .off)
         signalStates[signal] = (home, distant ?? .off)
+    }
+    
+    func updateSignals() async throws {
+        let snapshot = await snapshot()
+        guard let signalStates = try SignalCoordinator.refresh(snapshot: snapshot, layoutState: .running) else {
+            // Layout not active
+            return
+        }
+        for changedSignal in signalStates {
+            try await setSignalState(changedSignal.key,
+                                     home: changedSignal.value.0,
+                                     distant: changedSignal.value.1)
+            // Telemetry: a publish failure must not fail the signal update
+            try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value.0)
+        }
     }
 
     func blockState(_ block: Block) -> BlockRuntimeState? {

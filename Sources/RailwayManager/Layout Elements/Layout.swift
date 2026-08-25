@@ -75,6 +75,14 @@ class Layout: @unchecked Sendable  {
         return lights.first(where: { $0.id == id })!
     }
     
+    // Return the signal at the end of the block in the specified direction
+    func endSignalForBlock(_ block: Block, direction: Direction) -> Signal? {
+        return signals.first(where: {
+            $0.direction == direction
+            && $0.location == block
+        })
+    }
+    
     // Return the sensor at the start or end of this block depending on the direction
     // Start sensor indicates occupancy
     // End sensor is where the train should stop waiting for the next resource

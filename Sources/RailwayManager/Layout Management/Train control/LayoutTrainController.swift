@@ -108,16 +108,14 @@ actor LayoutTrainController {
                       delay: TimeInterval = 0) async throws {
         
         let direction = try trainDirection(train)
+        log.verbose("Train \(train) speed is \(speed) \(direction)")
 
         if GlobalOptions.noCBUS || GlobalOptions.noDCC {
-            log.verbose("Train \(train) speed is \(speed) \(direction)")
             return
         }
         
         let session = try await activeDCCSession(train)
-
         try await train.setSpeed(speed, direction: direction, delay: delay, session: session)
-        log.verbose("Train \(train) speed is \(speed) \(direction)")
     }
     
     public func setTrainFunction(train: Train, function: Int, on: Bool) async throws {
