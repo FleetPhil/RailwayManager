@@ -135,7 +135,7 @@ actor LayoutManager: Sendable {
         // OK all looking good
         try await setState(.running)
         
-        let routeOperator = try RouteOperator(
+        let routeOperator = try await RouteOperator(
             route: route,
             train: train,
             layout: layout,

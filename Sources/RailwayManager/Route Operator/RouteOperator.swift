@@ -38,7 +38,6 @@ actor RouteOperator {
     }
     
     // Train state
-    private var routeDirection: Direction
     private var lastCommandedTrainSpeed: TrainSpeed = .stop
     
     // The current session and path for this route
@@ -53,7 +52,7 @@ actor RouteOperator {
          layout: Layout,
          stateService: LayoutTrackStateService,
          trainController: LayoutTrainController,
-        ) throws {
+        ) async throws {
         self.route = route
         self.train = train
         self.layout = layout
@@ -63,7 +62,7 @@ actor RouteOperator {
         guard let routeDirection = route.segments.first?.path.direction else {
             throw TrainError.noTrainDirection(train.id)
         }
-        self.routeDirection = routeDirection
+        try await trainController.setTrainDirection(train, direction: routeDirection)
         
         currentItemIndex = CurrentItemIndex(segmentIndex: 0, pathItemIndex: 0)
     }
@@ -102,7 +101,8 @@ actor RouteOperator {
         try await trainController.requestSession(for: train)
         
         // Update the block and train status
-        try await trainController.setTrainDirection(train, direction: routeDirection)
+        let routeDirection = route.segments.first?.path.direction
+        try await trainController.setTrainDirection(train, direction: routeDirection ?? .forward)
         try await stateService.setStateForTrain(train, state: .idle)
         try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train))
         
@@ -126,11 +126,12 @@ actor RouteOperator {
             newSpeed = .slow
         default:
             // If no block exit speed is slow
-            if [.noExit, .none].contains(inBlock.blockExit[routeDirection]) {
+            let trainDirection = try await trainController.trainDirection(train)
+            if [.noExit, .none].contains(inBlock.blockExit[trainDirection]) {
                 newSpeed = .slow
             } else {
                 // Set speed according to signal state
-                if let endSignal = layout.endSignalForBlock(inBlock, direction: routeDirection) {
+                if let endSignal = layout.endSignalForBlock(inBlock, direction: trainDirection) {
                     let blockEndSignalState = try await stateService.signalState(endSignal)
                     switch blockEndSignalState {
                     case (.stop, _):                    newSpeed = .slow        // Home state stop
@@ -246,10 +247,11 @@ actor RouteOperator {
         let trainSensor =
             try await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
         guard let sensor = layout.sensor(sensorID) else { throw TrainError.invalidSensor(sensorID) }
+        let trainDirection = try await trainController.trainDirection(train)
         
         if trainSensor == .front
             && sensor.block == pathItem.toBlock
-            && sensor.location.isStart {
+            && sensor.location.isStart(trainDirection) {
             
             // Sensor is at the start of the next block in the path
             try await processOccupiedRouteBlock()
@@ -257,7 +259,7 @@ actor RouteOperator {
         
         if trainSensor == .rear
             && sensor.block == pathItem.fromBlock
-            && sensor.location.isStart {
+            && sensor.location.isStart(trainDirection) {
             
             // Sensor is at the start of the from block in the surrent path
             // So train is clear of the previous block and any turnouts etc
@@ -265,7 +267,7 @@ actor RouteOperator {
         }
         
         if trainSensor == .front
-            && sensor.location.isEnd {
+            && sensor.location.isEnd(trainDirection) {
             try await handleFrontAtBlockEnd(sensor, pathItem: pathItem)
         }
     }
@@ -354,8 +356,9 @@ actor RouteOperator {
         // If this is the last item in the segment check if there is a wait time
         if currentPathItem.role.isLast, let waitTime = currentWaitTime {
             // set the state and calculate the speed
-            guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: routeDirection) else {
-                throw TrainError.applicationError("No end sensor for block \(currentPathItem.toBlock), \(routeDirection)")
+            let trainDirection = try await trainController.trainDirection(train)
+            guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: trainDirection) else {
+                throw TrainError.applicationError("No end sensor for block \(currentPathItem.toBlock), \(trainDirection)")
             }
             try await setTrainState(.stoppingForTimer(endSensor, waitTime))
             try await setTrainSpeed(inBlock: currentPathItem.toBlock)

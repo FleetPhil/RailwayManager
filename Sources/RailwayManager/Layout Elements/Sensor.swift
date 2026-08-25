@@ -37,22 +37,24 @@ enum SensorLocation: Comparable {
         }
     }
     
-    // True if the start or only sensor in the block
-    var isStart: Bool {
+    // True if the start or only sensor in the block in the specified direction
+    func isStart(_ direction: Direction) -> Bool {
         switch self {
-        case .start, .single:       true
-        case .end:                  false
+        case .start:    direction == .forward ? true : false
+        case .single:   true
+        case .end:      direction == .forward ? false : true
             
         }
     }
-    // True if the end or only sensor in the block
-    var isEnd: Bool {
+    // True if the end or only sensor in the block in the specified direction
+    func isEnd(_ direction: Direction) -> Bool {
         switch self {
-        case .end, .single:       true
-        case .start:              false
+        case .start:    direction == .forward ? false : true
+        case .single:   true
+        case .end:      direction == .forward ? true : false
         }
     }
-    
+
     var block: Block {
         switch self {
         case .end(let block, _):    block

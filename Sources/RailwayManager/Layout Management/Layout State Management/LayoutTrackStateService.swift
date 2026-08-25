@@ -361,10 +361,13 @@ actor LayoutTrackStateService {
         
         // The train end is relative to the train moving forward, so adjust if the block direction is reverse
         let trainDirectionSensor: TrainSensor = trainDirection == .forward ? trainSensor : trainSensor.oppositePosition
+        
+        // Sensor position is also relative to direction
+        
 
         log.verbose("Sensor \(sensor.id) (\(sensor.location)) (\(trainDirection)) for train posn \(trainDirectionSensor)")
         
-        switch (sensor.location.isStart, trainDirectionSensor) {
+        switch (sensor.location.isStart(trainDirection), trainDirectionSensor) {
         case (true, .front):
             // Front of the train sets the first or only sensor in the block
             switch blockState {

@@ -76,7 +76,11 @@ actor LayoutTrainController {
     }
     
     func setTrainDirection(_ train: Train, direction: Direction) throws {
-        if try trainDirection(train) == direction { return }
+        if let currentDirection = trainDirections[train] {
+            if direction == currentDirection { return }
+        }
+         
+        // Either no current direction is set or it is different to the one being commanded
         log.verbose("Train \(train) direction is \(direction)")
         trainDirections[train] = direction
     }

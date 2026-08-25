@@ -120,7 +120,7 @@ class Cellar: Layout, @unchecked Sendable {
             Signal(id: 16, address: 0, location: block("J"), indication: .point(point(6), .splitBranch), direction: .forward),
             Signal(id: 17, address: 0, location: block("K"), indication: .point(point(6), .single), direction: .reverse),
             Signal(id: 18, address: 214, location: block("K"), indication: .point(point(7), .single), direction: .forward),
-            Signal(id: 19, address: 0, location: block("L"), indication: .point(point(5), .splitBranch), direction: .reverse),
+            Signal(id: 19, address: 0, location: block("L"), indication: .point(point(4), .splitBranch), direction: .reverse),
             Signal(id: 20, address: 0, location: block("L"), indication: .point(point(9), .single), direction: .forward),
             Signal(id: 21, address: 0, location: block("M"), indication: .point(point(9), .splitStraight), direction: .reverse),
             Signal(id: 23, address: 0, location: block("N"), indication: .point(point(9), .splitBranch), direction: .reverse),
