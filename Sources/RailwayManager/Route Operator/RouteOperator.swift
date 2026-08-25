@@ -102,7 +102,7 @@ actor RouteOperator {
         try await trainController.requestSession(for: train)
         
         // Update the block and train status
-        await trainController.setTrainDirection(train, direction: routeDirection)
+        try await trainController.setTrainDirection(train, direction: routeDirection)
         try await stateService.setStateForTrain(train, state: .idle)
         try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train))
         
@@ -314,7 +314,9 @@ actor RouteOperator {
                 try await setTrainState(.stoppedAtSensor(sensor))
                 
             default:
-                break       // Other states are no-ops or likely spurious
+                // Nothing to do, the train is not stopping at the end of this block
+                // Set the block state to vacating
+                try await stateService.setStateForBlock(sensor.block, newState: .vacating(train))
             }
         }
     }
@@ -389,6 +391,9 @@ actor RouteOperator {
                 try await stateService.setDirectionForPoint(setting.point, newDirection: setting.direction)
             }
         }
+        
+        // Set the direction for this path item
+        try await stateService.trainController.setTrainDirection(train, direction: currentSegment.path.direction)
         
         // Set the speed for the new block
         try await setTrainSpeed(inBlock: currentPathItem.fromBlock)
