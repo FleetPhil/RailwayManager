@@ -143,6 +143,8 @@ actor RouteOperator {
             }
         }
         
+        log.verbose("Train speed is \(newSpeed) (was \(lastCommandedTrainSpeed))")
+        
         if newSpeed != lastCommandedTrainSpeed {
             lastCommandedTrainSpeed = newSpeed
             
@@ -299,7 +301,6 @@ actor RouteOperator {
                 log.verbose("Timer ends for \(train)")
                 
                 // Now move on starting with request for the next track resource
-                lastCommandedTrainSpeed = .normal
                 try await processNextPathItem()
             }
         } else if sensor.block == pathItem.fromBlock {
@@ -379,6 +380,9 @@ actor RouteOperator {
         // Move to the next path item
         if let nextIndex = nextPathItemIndex() {
             currentItemIndex = nextIndex
+            
+            // Check for change in direction (setDirection will return if no change)
+            try await trainController.setTrainDirection(train, direction: currentSegment.path.direction)
         } else {
             routeState = .ending
             return      // No more
@@ -394,9 +398,6 @@ actor RouteOperator {
                 try await stateService.setDirectionForPoint(setting.point, newDirection: setting.direction)
             }
         }
-        
-        // Set the direction for this path item
-        try await stateService.trainController.setTrainDirection(train, direction: currentSegment.path.direction)
         
         // Set the speed for the new block
         try await setTrainSpeed(inBlock: currentPathItem.fromBlock)

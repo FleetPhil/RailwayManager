@@ -306,7 +306,7 @@ actor LayoutManager: Sendable {
             await trackStateService.trainController.activateSession(session, forAddress: address)
             
         case .sessionAllocated(address: let address):
-            await trackStateService.trainController.stealSession(address: address)
+            try await trackStateService.trainController.stealSession(address: address)
             
             
             

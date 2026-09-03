@@ -176,7 +176,7 @@ struct RailwayManager: ParsableCommand {
                         case .runRoute:
                             try await runRoute(from: routeParams, layoutManager: layoutManager)
                         case .stopAllTrains:
-                            await LayoutEventHub.shared.publish(.stopAllTrains)
+                            await LayoutEventHub.shared.publish(.stopAllTrainsResetTrack)
                         }
                         
                     } catch {

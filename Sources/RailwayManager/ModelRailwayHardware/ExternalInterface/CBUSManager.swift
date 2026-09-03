@@ -241,7 +241,9 @@ extension CBUSManager {
         // Add terminator and convert to ascii
         var asciiData = (dataToSend + ";").asciiValues
         
-//        log.debug("Send CBUS: \(dataToSend)")
+        if [.GLOC, .RLOC, .KLOC].contains(message.opCode) {
+            log.debug("Send CBUS: \(dataToSend)")
+        }
 
         if (GlobalOptions.noCBUS == false) {
             do {
@@ -358,7 +360,7 @@ extension CBUSManager {
             
         case .ERR:
             guard hasBytes(4) else { return nil }
-            print("*** Received CBUS error \(message[3]) for address \(String(format: "%02X", message[2]))")
+            print("*** Received CBUS error \(message[3]) for address 0x\(String(format: "%02X", message[2]))")
             switch message[3] {
             case 2:         // Session in use
                 return .sessionAllocated(address: Int(message[2]))
@@ -387,10 +389,13 @@ extension CBUSManager {
             
         case .ASOF3:        // Sensor unset stats
             let deviceID = Int(message[3]) * 256 + Int(message[4])
+            let max = Int(message[6]) * 10
+            let min = Int(message[7]) * 10
             var s: String = "Sensor \(deviceID) unset: "
-            s.append(" \(Int(message[5])) readings, max: \(Int(message[6]) * 10), min: \(Int(message[7]) * 10)")
+            s.append(" \(Int(message[5])) readings, max: \(max), min: \(min)")
             log.debug(s)
-            return nil
+            
+            return .didUnsetSensor(deviceID, min < 1000 ? .south : .north)
             
         default:
             

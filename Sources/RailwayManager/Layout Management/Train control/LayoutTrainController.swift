@@ -15,9 +15,9 @@ actor LayoutTrainController {
         trainStates[train] = .idle
     }
     
-    func stealSession(address: Int) async {
-        log.verbose("Steal: sending KLOC for train address \(address)")
-        try await CBUSManager.shared.stealSession(forAddress: address)
+    func stealSession(address: Int) async throws  {
+        log.verbose("Steal: sending GLOC for train address \(address)")
+        try await CBUSManager.shared.stealSession(address: address)
     }
 
 
