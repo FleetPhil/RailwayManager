@@ -254,11 +254,16 @@ actor LayoutManager: Sendable {
                 try await trackStateService.setDefaultPositionforPoint(point)
             }
             
-        case .didSetSensor(let sensorID, let sensorOrientation):
-            guard let sensor = layout.sensor(sensorID) else { throw TrainError.invalidSensor(sensorID) }
+        case .didSetSensor(let sensorAddress, let sensorOrientation):
+            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
 
             try await trackStateService.processSensorSetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
             
+        case .didUnsetSensor(let sensorAddress, let sensorOrientation):
+            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
+
+            try await trackStateService.processSensorUnsetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
+
         case .didPushButton(let button):
             log.info("Button \(button) pressed")
             switch button {
@@ -291,9 +296,19 @@ actor LayoutManager: Sendable {
                 try await setState(.dormant)
             }
             
+        // MARK: Stop trains and reset track state
+        case .stopAllTrainsResetTrack:
+            await trackStateService.trainController.stopAllTrains()
+            try await resetTrackState(layout: layout)
+            
         // MARK: DCC Management
         case .didGetSession(session: let session, address: let address):
             await trackStateService.trainController.activateSession(session, forAddress: address)
+            
+        case .sessionAllocated(address: let address):
+            await trackStateService.trainController.stealSession(address: address)
+            
+            
             
         default:        // Ignore
             break

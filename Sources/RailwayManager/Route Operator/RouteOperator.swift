@@ -222,8 +222,8 @@ actor RouteOperator {
         case (.starting, .didSetSensor):
             break               // Ignore sensor events during the start sequence
             
-        case (_, .didSetSensor(let sensorID, let orientation)):
-            try await handleSensorSet(sensorID, orientation: orientation)
+        case (_, .didSetSensor(let sensorAddress, let orientation)):
+            try await handleSensorSet(sensorAddress, orientation: orientation)
             
         case (_, .didEndTimer(let timerRoute)):
             if timerRoute == route.id {
@@ -242,11 +242,11 @@ actor RouteOperator {
     // MARK: - Sensor event handling
     
     // Dispatch a sensor event based on which end of the train tripped it and where it sits on the current path
-    private func handleSensorSet(_ sensorID: Int, orientation: SensorEventOrientation) async throws {
+    private func handleSensorSet(_ sensorAddress: Int, orientation: SensorEventOrientation) async throws {
         let pathItem = currentPathItem
         let trainSensor =
             try await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
-        guard let sensor = layout.sensor(sensorID) else { throw TrainError.invalidSensor(sensorID) }
+        guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
         let trainDirection = try await trainController.trainDirection(train)
         
         if trainSensor == .front

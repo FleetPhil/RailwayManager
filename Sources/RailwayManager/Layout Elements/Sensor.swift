@@ -9,7 +9,7 @@ import Foundation
 
 
 // Start/End locations are with respect to the forward power setting
-enum SensorLocation: Comparable {
+enum SensorLocation: Comparable, Hashable {
     
     case start(Block, Int)            // At start of block with gap from block start
     case single(Block)                // Only sensor in the block
@@ -65,8 +65,9 @@ enum SensorLocation: Comparable {
     }
 }
 
-struct Sensor: Equatable, Sendable, CustomStringConvertible {
-    let id: Int                             // As known to controller
+struct Sensor: Equatable, Sendable, CustomStringConvertible, Hashable {
+    let id: Int                             // Logical ID
+    let address: Int                        // Hardware address
     private(set) var location: SensorLocation
     // Signal(s) adjacent to this sensor (for station stops)
     // In the indicated direction
@@ -76,8 +77,9 @@ struct Sensor: Equatable, Sendable, CustomStringConvertible {
         return "\(id)"
     }
     
-    init(id: Int, location: SensorLocation, signals: [ Direction : Signal] = [:]) {
+    init(id: Int, address: Int, location: SensorLocation, signals: [ Direction : Signal] = [:]) {
         self.id = id
+        self.address = address
         self.location = location
         self.signals = signals
     }

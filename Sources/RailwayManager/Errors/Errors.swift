@@ -25,6 +25,7 @@ enum TrainError: Error, Equatable {
     case MQTTConnectFail
     case noDCCSession(Int)
     case trainAlreadyActive(Int)
+    case unexpectedSensorEvent(String)
     
     var isFatal: Bool {
         switch self {
@@ -45,6 +46,7 @@ enum TrainError: Error, Equatable {
         case .MQTTConnectFail:              true
         case .noDCCSession:                 true
         case .trainAlreadyActive:           false
+        case .unexpectedSensorEvent:        false
         }
     }
 }

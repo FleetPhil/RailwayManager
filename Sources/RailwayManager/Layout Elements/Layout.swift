@@ -60,8 +60,8 @@ class Layout: @unchecked Sendable  {
     func point(_ id: Int) -> Point {
         return points.first(where: { $0.id == id })!
     }
-    func sensor(_ id: Int) -> Sensor? {
-        return sensors.first(where: { $0.id == id })
+    func sensor(_ address: Int) -> Sensor? {
+        return sensors.first(where: { $0.address == address })
     }
     func train(_ id: Int) -> Train? {
         return trains.first(where: { $0.id == id })!

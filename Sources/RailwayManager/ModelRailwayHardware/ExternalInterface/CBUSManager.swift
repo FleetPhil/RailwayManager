@@ -59,6 +59,8 @@ actor CBUSManager: Sendable {
             try serialPort.setSettings(
                 baudRateSetting: .symmetrical(.baud115200),
                 minimumBytesToRead: 1)
+            
+            try resetTrack()
         }
     }
     
@@ -126,6 +128,10 @@ actor CBUSManager: Sendable {
         try sendCBUSMessage(CBUSMessage(opCode: .RLOC, address: forAddress))
     }
     
+    func stealSession(address: Int) throws {
+        try sendCBUSMessage(CBUSMessage(opCode: .GLOC, address: address, dataBytes: [0x01]))
+    }
+    
     func releaseSession(_ session: Int) throws {
         try sendCBUSMessage(CBUSMessage(opCode: .KLOC, session: session))
     }
@@ -175,6 +181,9 @@ extension CBUSManager {
 
             case .KLOC:
                 return data + message.session!.hexStr
+
+            case .GLOC:     // Flags in dataBytes[0] set to 0x01 for steal. Expect PLOC in response
+                return data + message.address!.hexStr + message.dataBytes[0].hexStr
 
             case .DSPD:
                 var speedByte: UInt8 = UInt8 (message.speed!)
@@ -231,6 +240,8 @@ extension CBUSManager {
         
         // Add terminator and convert to ascii
         var asciiData = (dataToSend + ";").asciiValues
+        
+//        log.debug("Send CBUS: \(dataToSend)")
 
         if (GlobalOptions.noCBUS == false) {
             do {
@@ -319,17 +330,17 @@ extension CBUSManager {
         switch OpCode(rawValue: message[0]) {
         case .ASON1:
             guard hasBytes(6) else { return nil }
-            let deviceID = Int(message[3]) * 256 + Int(message[4])
+            let deviceAddress = Int(message[3]) * 256 + Int(message[4])
             let orientation: SensorEventOrientation = message[5] == 1 ? .north : .south
             
-             return .didSetSensor(deviceID, orientation)
+             return .didSetSensor(deviceAddress, orientation)
             
         case .ASOF1:
             guard hasBytes(6) else { return nil }
-            let deviceID = Int(message[3]) * 256 + Int(message[4])
+            let deviceAddress = Int(message[3]) * 256 + Int(message[4])
             let orientation: SensorEventOrientation = message[5] == 1 ? .north : .south
             
-            return .didUnsetSensor(deviceID, orientation)
+            return .didUnsetSensor(deviceAddress, orientation)
             
         case .PLOC:
             guard hasBytes(4) else { return nil }
@@ -348,7 +359,12 @@ extension CBUSManager {
         case .ERR:
             guard hasBytes(4) else { return nil }
             print("*** Received CBUS error \(message[3]) for address \(String(format: "%02X", message[2]))")
-            return nil
+            switch message[3] {
+            case 2:         // Session in use
+                return .sessionAllocated(address: Int(message[2]))
+            default:
+                return nil
+            }
             
         case .ARST:
             return nil

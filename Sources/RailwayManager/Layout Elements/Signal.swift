@@ -51,7 +51,7 @@ final class Signal: CustomStringConvertible, Sendable {
         return "\(id)"
     }
     
-    let id: Int                             // As known to hardware controller
+    let id: Int                             // Logical ID in layout
     let hardware: HardwareSignal
     let location: Block                     // Actual location of signal
     let direction: Direction

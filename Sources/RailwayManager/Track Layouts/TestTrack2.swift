@@ -70,16 +70,16 @@ class TestTrack2: Layout, @unchecked Sendable {
             
         // Sensor location start/end relative to the forward direction
         sensors = [
-            Sensor(id: 1, location: .start(block("A1"), 10)),
-            Sensor(id: 2, location: .end(block("A2"), 10), signals: [.forward : signal(1)]),
-            Sensor(id: 3, location: .start(block("B1"), 10)),
-            Sensor(id: 4, location: .end(block("B2"), 10), signals: [.forward : signal(2)]),
-            Sensor(id: 5, location: .start(block("C"), 10), signals: [.reverse : signal(5)]),
-            Sensor(id: 6, location: .end(block("C"), 10), signals: [.forward : signal(3)]),
-            Sensor(id: 7, location: .single(block("D"))),
-            Sensor(id: 8, location: .end(block("A1"), 10), signals: [.forward : signal(6)]),
-            Sensor(id: 9, location: .end(block("B1"), 10), signals: [.forward : signal(7)]),
-            Sensor(id: 10, location: .start(block("A2"), 10)),
+//            Sensor(id: 1, location: .start(block("A1"), 10)),
+//            Sensor(id: 2, location: .end(block("A2"), 10), signals: [.forward : signal(1)]),
+//            Sensor(id: 3, location: .start(block("B1"), 10)),
+//            Sensor(id: 4, location: .end(block("B2"), 10), signals: [.forward : signal(2)]),
+//            Sensor(id: 5, location: .start(block("C"), 10), signals: [.reverse : signal(5)]),
+//            Sensor(id: 6, location: .end(block("C"), 10), signals: [.forward : signal(3)]),
+//            Sensor(id: 7, location: .single(block("D"))),
+//            Sensor(id: 8, location: .end(block("A1"), 10), signals: [.forward : signal(6)]),
+//            Sensor(id: 9, location: .end(block("B1"), 10), signals: [.forward : signal(7)]),
+//            Sensor(id: 10, location: .start(block("A2"), 10)),
         ]
         buildLayout()
     }

@@ -42,12 +42,16 @@ struct PointRuntimeState: CustomStringConvertible, Sendable, Equatable {
     }
 }
 
-
+enum SensorRuntimeState: Sendable, Equatable, Hashable {
+    case unset
+    case set
+}
 
 actor LayoutTrackStateService {
     private var blockStates: [Block: BlockRuntimeState] = [:]
     private var pointStates: [Point : PointRuntimeState] = [:]
     private var signalStates: [Signal : (SignalState, SignalState)] = [:]
+    private var sensorStates: [Sensor : SensorRuntimeState] = [:]
     
     let trainController = LayoutTrainController()
     
@@ -76,6 +80,10 @@ actor LayoutTrackStateService {
         
         signalStates = layout.signals.reduce(into: [:], { result, signal in
             result[signal] = .init((.off, .off))
+        })
+        
+        sensorStates = layout.sensors.reduce(into: [:], { result, sensor in
+            result[sensor] = .unset
         })
         
         // Send MQTT updates
@@ -149,6 +157,8 @@ actor LayoutTrackStateService {
         try await trainController.setTrainState(train, state: state)
     }
     
+    // Validate the transition and set the new state
+    // Return true for valid transition, false for invalid
     func setStateForBlock(_ block: Block, newState: BlockRuntimeState) async throws {
         let oldState = blockStates[block] ?? .vacant
         
@@ -214,8 +224,10 @@ actor LayoutTrackStateService {
             
         case .vacating(let vacatingTrain):
             switch oldState {
-            case .vacant, .reserved:
-                break
+            case .vacant:
+                throw TrainError.invalidBlockStateChange("Train \(vacatingTrain) can't vacate \(block): block is vacant")
+            case .reserved:
+                throw TrainError.invalidBlockStateChange("Train \(vacatingTrain) can't vacate reserved block \(block)")
             case .occupied(let train), .vacating(let train):
                 if train != vacatingTrain {
                     throw TrainError.invalidBlockStateChange("Train \(vacatingTrain) can't vacate \(block): in use by \(train)")
@@ -355,6 +367,11 @@ actor LayoutTrackStateService {
     }
 
     func processSensorSetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
+        guard sensorStates[sensor] == .unset else {
+            throw TrainError.unexpectedSensorEvent("Sensor \(sensor) set event when in set state")
+        }
+        sensorStates[sensor] = .set
+        
         guard let blockState = blockStates[sensor.block] else { throw TrainError.unexpectedTrackState("No state for block \(sensor.block)") }
         guard let train = blockState.train else { throw TrainError.noTrainForSetSensor(sensor.id) }
         let trainDirection = try await trainController.trainDirection(train) 
@@ -363,7 +380,6 @@ actor LayoutTrackStateService {
         let trainDirectionSensor: TrainSensor = trainDirection == .forward ? trainSensor : trainSensor.oppositePosition
         
         // Sensor position is also relative to direction
-        
 
         log.verbose("Sensor \(sensor.id) (\(sensor.location)) (\(trainDirection)) for train posn \(trainDirectionSensor)")
         
@@ -396,6 +412,13 @@ actor LayoutTrackStateService {
         default:
             break
         }
+    }
+    
+    func processSensorUnsetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
+        guard sensorStates[sensor] == .set else {
+            throw TrainError.unexpectedSensorEvent("Sensor \(sensor) unset event when in unset state")
+        }
+        sensorStates[sensor] = .unset
     }
     
     func setDirectionForPointID(_ id: Int, newDirection: PointDirection) async throws {

@@ -14,12 +14,18 @@ actor LayoutTrainController {
         
         trainStates[train] = .idle
     }
+    
+    func stealSession(address: Int) async {
+        log.verbose("Steal: sending KLOC for train address \(address)")
+        try await CBUSManager.shared.stealSession(forAddress: address)
+    }
+
 
     func requestSession(for train: Train) async throws {
         if await dccSessionStore.session(for: train) != nil {
             return
         }
-
+        
         await dccSessionStore.setAwaiting(train)
         log.verbose("Sending RLOC for train address \(train.address)")
         try await CBUSManager.shared.requestSession(forAddress: train.address)
@@ -152,10 +158,13 @@ actor LayoutTrainController {
         
         if stopFailed {
             do {
+                log.warning("CBUS emergency stop")
                 try await CBUSManager.shared.stopAllTrains()
             } catch {
                 log.error("CBUS emergency stop failed: \(error)")
             }
         }
+        
+        
     }
 }

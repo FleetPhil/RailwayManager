@@ -43,12 +43,12 @@ class TramSplit: Layout, @unchecked Sendable {
         
         // NB: Location is relative to the forward direction
         sensors = [
-            Sensor(id: 106, location: .end(block("A"), 0), signals: [ .forward : signal(209)]),
-            Sensor(id: 105, location: .start(block("A"), 0)),
-            Sensor(id: 104, location: .start(block("B"), 0)),
-            Sensor(id: 101, location: .end(block("B"), 0)),
-            Sensor(id: 103, location: .start(block("C"), 0)),
-            Sensor(id: 102, location: .end(block("C"), 0)),
+//            Sensor(id: 106, location: .end(block("A"), 0), signals: [ .forward : signal(209)]),
+//            Sensor(id: 105, location: .start(block("A"), 0)),
+//            Sensor(id: 104, location: .start(block("B"), 0)),
+//            Sensor(id: 101, location: .end(block("B"), 0)),
+//            Sensor(id: 103, location: .start(block("C"), 0)),
+//            Sensor(id: 102, location: .end(block("C"), 0)),
         ]
         buildLayout()
     }

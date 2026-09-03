@@ -253,6 +253,12 @@ extension MQTTManager {
             var waitTime: WaitTime?         // No stop at segment end if nil
         }
         
+        enum RouteCommand: Int, Codable, Sendable {
+            case runRoute = 1
+            case stopAllTrains = 2
+        }
+        
+        var command: RouteCommand
         var routeID: Int
         var trainID: Int
         var segments: [SegmentParams]

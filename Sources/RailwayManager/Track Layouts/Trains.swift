@@ -9,7 +9,7 @@ import Foundation
 
 struct Trains {
     static var trainParams: [TrainParams] {
-        var trainID = 1
+        let sbbTrainID = 1
         var sbbSpeeds: [ TrainSpeed : TrainSpeedSetting ] {
             [
                 .stop :     TrainSpeedSetting(power: 0, speed: 0),
@@ -25,10 +25,27 @@ struct Trains {
                 TrainStartFunction(startFunction: 5, delay: 2),        // Conductor whistle
             ]
         }
+        let bernTrainID = 2
+        var bernSpeeds: [ TrainSpeed : TrainSpeedSetting ] {
+            [
+                .stop :     TrainSpeedSetting(power: 0, speed: 0),
+                .slow :     TrainSpeedSetting(power: 25, speed: 12),
+                .normal :   TrainSpeedSetting(power: 40, speed: 20),
+                .fast :     TrainSpeedSetting(power: 60, speed: 40),
+            ]
+        }
         
-        return [TrainParams(id: trainID, name: "SBB Re430", address: 20, trainSpeeds: sbbSpeeds, startFunctions: sbbStartFunctions)]
+        var bernStartFunctions: [TrainStartFunction] {
+            [
+            ]
+        }
+
+        return [
+            TrainParams(id: sbbTrainID, name: "SBB Re430", address: 20, trainSpeeds: sbbSpeeds, startFunctions: sbbStartFunctions),
+            TrainParams(id: bernTrainID, name: "Bernina", address: 22, trainSpeeds: bernSpeeds, startFunctions: bernStartFunctions)
+        ]
     }
-     
+
     static var trains: [Train] {
         return trainParams.map { Train(trainParams: $0) }
     }

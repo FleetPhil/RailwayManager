@@ -128,41 +128,41 @@ class Cellar: Layout, @unchecked Sendable {
             
         // Sensor location start/end relative to the forward direction
         sensors = [
-            Sensor(id: 1, location: .start(block("A"), 10)),
-            Sensor(id: 2, location: .end(block("A"), 10)),
+            Sensor(id: 1, address: 182, location: .start(block("A"), 10)),
+            Sensor(id: 2, address: 142, location: .end(block("A"), 10)),
 
-            Sensor(id: 3, location: .start(block("B"), 10)),
-            Sensor(id: 4, location: .end(block("B"), 10)),
+            Sensor(id: 3, address: 184, location: .start(block("B"), 10)),
+            Sensor(id: 4, address: 144, location: .end(block("B"), 10)),
 
-            Sensor(id: 5, location: .start(block("C"), 10)),
-            Sensor(id: 6, location: .end(block("C"), 10)),
+            Sensor(id: 5, address: 183, location: .start(block("C"), 10)),
+            Sensor(id: 6, address: 141, location: .end(block("C"), 10)),
 
-            Sensor(id: 7, location: .start(block("D"), 10)),
-            Sensor(id: 8, location: .end(block("D"), 10)),
+            Sensor(id: 7, address: 143, location: .start(block("D"), 10)),
+            Sensor(id: 8, address: 162, location: .end(block("D"), 10)),
 
-            Sensor(id: 9, location: .start(block("E"), 10)),
-            Sensor(id: 10, location: .end(block("E"), 10)),
+            Sensor(id: 9, address: 0, location: .start(block("E"), 10)),
+            Sensor(id: 10, address: 0, location: .end(block("E"), 10)),
 
-            Sensor(id: 11, location: .start(block("G"), 10)),
-            Sensor(id: 12,location: .end(block("G"), 10)),
+            Sensor(id: 11, address: 0, location: .start(block("G"), 10)),
+            Sensor(id: 12, address: 0,location: .end(block("G"), 10)),
 
-            Sensor(id: 13, location: .start(block("H"), 10)),
-            Sensor(id: 14, location: .end(block("H"), 10)),
+            Sensor(id: 13, address: 161, location: .start(block("H"), 10)),
+            Sensor(id: 14, address: 202, location: .end(block("H"), 10)),
 
-            Sensor(id: 15, location: .start(block("J"), 10)),
-            Sensor(id: 16, location: .end(block("J"), 10)),
+            Sensor(id: 15, address: 0, location: .start(block("J"), 10)),
+            Sensor(id: 16, address: 0, location: .end(block("J"), 10)),
 
-            Sensor(id: 17, location: .start(block("K"), 10)),
-            Sensor(id: 18,location: .end(block("K"), 10)),
+            Sensor(id: 17, address: 201, location: .start(block("K"), 10)),
+            Sensor(id: 18, address: 181,location: .end(block("K"), 10)),
 
-            Sensor(id: 19, location: .start(block("L"), 10)),
-            Sensor(id: 20, location: .end(block("L"), 10)),
+            Sensor(id: 19, address: 163, location: .start(block("L"), 10)),
+            Sensor(id: 20, address: 164, location: .end(block("L"), 10)),
 
-            Sensor(id: 21, location: .start(block("M"), 10)),
-            Sensor(id: 22, location: .end(block("M"), 10)),
+            Sensor(id: 21, address: 185, location: .start(block("M"), 10)),
+            Sensor(id: 22, address: 203, location: .end(block("M"), 10)),
 
-            Sensor(id: 23, location: .start(block("N"), 10)),
-            Sensor(id: 24, location: .end(block("N"), 10)),
+            Sensor(id: 23, address: 0, location: .start(block("N"), 10)),
+            Sensor(id: 24, address: 0, location: .end(block("N"), 10)),
         ]
         buildLayout()
     }

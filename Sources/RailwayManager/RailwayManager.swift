@@ -172,7 +172,13 @@ struct RailwayManager: ParsableCommand {
                 
                 for await routeParams in requests {
                     do {
-                        try await runRoute(from: routeParams, layoutManager: layoutManager)
+                        switch routeParams.command {
+                        case .runRoute:
+                            try await runRoute(from: routeParams, layoutManager: layoutManager)
+                        case .stopAllTrains:
+                            await LayoutEventHub.shared.publish(.stopAllTrains)
+                        }
+                        
                     } catch {
                         log.error("Route request \(routeParams.routeID) rejected: \(error)")
                     }
@@ -214,13 +220,13 @@ struct RailwayManager: ParsableCommand {
     
     static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {
         if input.starts(with: "sn") {            // Sensor north
-            if let sensorID = Int(input.dropFirst(2)) {
-                await LayoutEventHub.shared.publish(.didSetSensor(sensorID, .north))
+            if let sensorAddress = Int(input.dropFirst(2)) {
+                await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, .north))
             }
         }
         if input.starts(with: "ss") {            // Sensor south
-            if let sensorID = Int(input.dropFirst(2)) {
-                await LayoutEventHub.shared.publish(.didSetSensor(sensorID, .south))
+            if let sensorAddress = Int(input.dropFirst(2)) {
+                await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, .south))
             }
         }
         if input.starts(with: "p") {

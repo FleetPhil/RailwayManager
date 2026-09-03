@@ -57,6 +57,10 @@ enum LayoutEvent: CustomStringConvertible, Equatable, Sendable {
     
     // DCC Management
     case didGetSession(session: Int, address: Int)
+    case sessionAllocated(address: Int)
+    
+    // Layout Commands
+    case stopAllTrainsResetTrack
     
     nonisolated var description: String {
         switch self {
@@ -80,6 +84,11 @@ enum LayoutEvent: CustomStringConvertible, Equatable, Sendable {
             
         case .didGetSession(let session, let address):
             return "did get session \(session) for address \(address)"
+        case .sessionAllocated(let address):
+            return "session already allocated for address \(address)"
+            
+        case .stopAllTrainsResetTrack:
+            return "Stop all trains & reset track state"
         }
     }
     
@@ -98,6 +107,9 @@ enum LayoutEvent: CustomStringConvertible, Equatable, Sendable {
         case .didOccupyBlock:               false
             
         case .didGetSession(_, _):          false
+            
+        case .stopAllTrainsResetTrack:      false
+        case .sessionAllocated:             false
         }
     }
     
