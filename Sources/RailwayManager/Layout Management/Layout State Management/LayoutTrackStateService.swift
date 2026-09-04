@@ -388,10 +388,6 @@ actor LayoutTrackStateService {
             // Front of the train sets the first or only sensor in the block
             switch blockState {
             case .reserved(let train):
-                guard let currentBlockForTrain = occupiedBlockForTrain(train) else {
-                    throw TrainError.noCurrentBlockForTrainSensor(sensor.id)
-                }
-                
                 // Occupy this block
                 try await setStateForBlock(sensor.block, newState: .occupied(train))
                 

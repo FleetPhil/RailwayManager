@@ -10,9 +10,9 @@ import Foundation
 
 // Start/End locations are with respect to the forward power setting
 enum SensorLocation: Comparable, Hashable {
-    
     case start(Block, Int)            // At start of block with gap from block start
     case single(Block)                // Only sensor in the block
+    case station(Block)               // At the mid point of a station (block must have start and end as well)
     case end(Block, Int)              // At end of block with gap to actual block end
     
     // Order of sensors is start, middle, end in the forward direction
@@ -42,6 +42,7 @@ enum SensorLocation: Comparable, Hashable {
         switch self {
         case .start:    direction == .forward ? true : false
         case .single:   true
+        case .station:  false
         case .end:      direction == .forward ? false : true
             
         }
@@ -51,6 +52,7 @@ enum SensorLocation: Comparable, Hashable {
         switch self {
         case .start:    direction == .forward ? false : true
         case .single:   true
+        case .station:  false
         case .end:      direction == .forward ? true : false
         }
     }
@@ -60,6 +62,7 @@ enum SensorLocation: Comparable, Hashable {
         case .end(let block, _):    block
         case .single(let block):    block
         case .start(let block, _):  block
+        case .station(let block):   block
         }
 
     }
@@ -93,6 +96,15 @@ struct Sensor: Equatable, Sendable, CustomStringConvertible, Hashable {
             return block
         case .single(let block):
             return block
+        case .station(let block):
+            return block
+        }
+    }
+    
+    var isStation: Bool {
+        switch location {
+        case .station:      true
+        default:            false
         }
     }
 }

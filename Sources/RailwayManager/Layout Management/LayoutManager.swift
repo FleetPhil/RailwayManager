@@ -271,14 +271,14 @@ actor LayoutManager: Sendable {
                 // Run default route
                 break
                 
-            case 2:
-                // Stop all trains
-                await trackStateService.trainController.stopAllTrains()
-                
+            case 2:     // disconnect MQTT
+                try await MQTTManager.shared.disconnect()
+
             case 3:
-                // Report state
-                break
-                
+                // Stop all trains & reset
+                await trackStateService.trainController.stopAllTrains()
+                try await trackStateService.reset()
+
             case 5:     // Touch sensor
                 break
                 

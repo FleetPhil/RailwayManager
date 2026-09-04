@@ -22,7 +22,7 @@ enum TrainError: Error, Equatable {
     case lockAlreadyExists(Block, Train)
     case noLockToRelease(Block, Train)
     case CBUSError(String)
-    case MQTTConnectFail
+    case MQTTConnectFail(String)
     case noDCCSession(Int)
     case trainAlreadyActive(Int)
     case unexpectedSensorEvent(String)

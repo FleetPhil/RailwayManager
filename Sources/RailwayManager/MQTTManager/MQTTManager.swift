@@ -61,12 +61,14 @@ actor MQTTManager: Sendable {
         switch mqttState {
         case .idle:
             // connect to MQTT
+            try? await client?.shutdown()       // In case connection is open
+
             do {
                 try await client?.connect()
                 mqttState = .connected
             } catch {
                 mqttState = .error
-                throw TrainError.MQTTConnectFail
+                throw TrainError.MQTTConnectFail(error.localizedDescription)
             }
             
         case .connected:
@@ -75,6 +77,11 @@ actor MQTTManager: Sendable {
             break
             
         }
+    }
+    
+    func disconnect() throws {
+        try client?.syncShutdownGracefully()
+        client = nil
     }
     
     func sendTopolology(fromLayout: Layout) async throws {
@@ -161,8 +168,12 @@ actor MQTTManager: Sendable {
         case .reserved(let train):
             itemState = "reserved"
             additionalInformation = "Train \(train)"
-        case .occupied(let train), .vacating(let train):
+        case .occupied(let train):
             itemState = "occupied"
+            additionalInformation = "Train \(train)"
+        case .vacating(let train):
+            itemState = "vacating"
+            additionalInformation = "Train \(train)"
         }
         
         do {

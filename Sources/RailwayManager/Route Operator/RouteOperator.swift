@@ -354,26 +354,40 @@ actor RouteOperator {
         // Set the state on the vacating block
         try await stateService.setStateForBlock(currentPathItem.fromBlock, newState: .vacating(train))
         
-        // If this is the last item in the segment check if there is a wait time
-        if currentPathItem.role.isLast, let waitTime = currentWaitTime {
-            // set the state and calculate the speed
-            let trainDirection = try await trainController.trainDirection(train)
-            guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: trainDirection) else {
-                throw TrainError.applicationError("No end sensor for block \(currentPathItem.toBlock), \(trainDirection)")
-            }
-            try await setTrainState(.stoppingForTimer(endSensor, waitTime))
-            try await setTrainSpeed(inBlock: currentPathItem.toBlock)
-            
-            // If this is also the last segment set the route state
-            if currentSegmentIsLast {
-                routeState = .ending
-            }
-            
-            // No more processing for now
+        // Check if we are stopping in this block, if not just carry on
+        // We are stopping if this is the last pathItem in the segment and a wait time has been defined
+        guard currentPathItem.role.isLast, let waitTime = currentWaitTime else {
+            try await processNextPathItem()
             return
         }
         
-        try await processNextPathItem()
+        // We are stopping in toBlock
+        
+        // Identify the sensor that we will be stopping at:
+        // If there is a station sensor in the block use that, otherwise use the end sensor
+        var stopSensor: Sensor {
+            get throws {
+                if let stationSensor = layout.stationSensorForBlock(currentPathItem.toBlock) {
+                    return stationSensor
+                } else {
+                    let trainDirection = try trainController.trainDirection(train)
+                    guard let endSensor = layout.sensorForBlock(currentPathItem.toBlock, atBlockStart: false, inDirection: trainDirection) else {
+                        throw TrainError.applicationError("No end sensor for block \(currentPathItem.toBlock), \(trainDirection)")
+                    }
+                    return endSensor
+                }
+            }
+        }
+        
+        try await setTrainState(.stoppingForTimer(stopSensor, waitTime))
+        try await setTrainSpeed(inBlock: currentPathItem.toBlock)
+        
+        // If this is also the last segment set the route state
+        if currentSegmentIsLast {
+            routeState = .ending
+        }
+        
+        // No more processing for now
     }
          
     private func processNextPathItem() async throws  {

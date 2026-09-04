@@ -219,14 +219,26 @@ struct RailwayManager: ParsableCommand {
     }
     
     static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {
+        if input.starts(with: "x") {
+            await LayoutEventHub.shared.publish(.didPushButton(2))
+        }
+        
         if input.starts(with: "sn") {            // Sensor north
             if let sensorAddress = Int(input.dropFirst(2)) {
                 await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, .north))
+                Task {
+                    try await Task.sleep(for: .seconds(1))
+                    await LayoutEventHub.shared.publish(.didUnsetSensor(sensorAddress, .north))
+                }
             }
         }
         if input.starts(with: "ss") {            // Sensor south
             if let sensorAddress = Int(input.dropFirst(2)) {
                 await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, .south))
+                Task {
+                    try await Task.sleep(for: .seconds(1))
+                    await LayoutEventHub.shared.publish(.didUnsetSensor(sensorAddress, .south))
+                }
             }
         }
         if input.starts(with: "p") {

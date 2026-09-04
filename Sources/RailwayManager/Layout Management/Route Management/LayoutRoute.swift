@@ -261,7 +261,10 @@ extension Layout {
         
         for sensor in self.sensors {
             switch sensor.location {
-            case .start(let sensorBlock, _), .single(let sensorBlock), .end(let sensorBlock, _):
+            case    .start(let sensorBlock, _),
+                    .single(let sensorBlock),
+                    .station(let sensorBlock),
+                    .end(let sensorBlock, _):
                 if blocks.contains(sensorBlock) == false {
                     log.error("Sensor \(sensor.id) located in unknown block \(sensorBlock.id)")
                     return false

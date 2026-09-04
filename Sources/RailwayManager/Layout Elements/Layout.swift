@@ -106,6 +106,10 @@ class Layout: @unchecked Sendable  {
         }
     }
     
+    func stationSensorForBlock(_ block: Block) -> Sensor? {
+        return sensors.filter({ $0.block == block }).first(where: { $0.isStation })
+    }
+    
     // Return the blocks starting with the parameter up to the next point in each direction
     // I.e. the blocks with no intervening points
     

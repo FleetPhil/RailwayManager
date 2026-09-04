@@ -11,8 +11,8 @@ extension RailwayManager {
     static func setupRoutes(layoutManager: LayoutManager) async throws -> Route  {
         let layout = layoutManager.layout
 
-        let path1 = try layout.path(fromBlock: layout.block("C"),
-                                    toBlock: layout.block("A"),
+        let path1 = try layout.path(fromBlock: layout.block("H"),
+                                    toBlock: layout.block("B"),
                                     direction: .forward)
         let segment1 = Segment(path: path1, waitTime: .halt)
 //        let path2 = try layout.path(fromBlock: layout.block("A"),
