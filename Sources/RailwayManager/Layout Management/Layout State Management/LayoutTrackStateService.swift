@@ -82,9 +82,11 @@ actor LayoutTrackStateService {
             result[signal] = .init((.off, .off))
         })
         
-        sensorStates = layout.sensors.reduce(into: [:], { result, sensor in
-            result[sensor] = .unset
-        })
+        sensorStates = layout.sensors
+            .filter({ $0.address != 0 })
+            .reduce(into: [:], { result, sensor in
+                result[sensor] = .unset
+            })
         
         // Send MQTT updates
         for block in layout.blocks {
@@ -117,12 +119,11 @@ actor LayoutTrackStateService {
         signalStates[signal] = (home, distant ?? .off)
     }
     
+    // Will not be called if layout is dormant
     func updateSignals() async throws {
         let snapshot = await snapshot()
-        guard let signalStates = try SignalCoordinator.refresh(snapshot: snapshot, layoutState: .running) else {
-            // Layout not active
-            return
-        }
+        let signalStates = try SignalCoordinator.refresh(snapshot: snapshot)
+
         for changedSignal in signalStates {
             try await setSignalState(changedSignal.key,
                                      home: changedSignal.value.0,
@@ -368,10 +369,12 @@ actor LayoutTrackStateService {
 
     func processSensorSetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
         guard sensorStates[sensor] == .unset else {
+            sensorStates[sensor] = .set
             throw TrainError.unexpectedSensorEvent("Sensor \(sensor) set event when in set state")
         }
+
         sensorStates[sensor] = .set
-        
+
         guard let blockState = blockStates[sensor.block] else { throw TrainError.unexpectedTrackState("No state for block \(sensor.block)") }
         guard let train = blockState.train else { throw TrainError.noTrainForSetSensor(sensor.id) }
         let trainDirection = try await trainController.trainDirection(train) 
@@ -412,6 +415,7 @@ actor LayoutTrackStateService {
     
     func processSensorUnsetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
         guard sensorStates[sensor] == .set else {
+            sensorStates[sensor] = .unset
             throw TrainError.unexpectedSensorEvent("Sensor \(sensor) unset event when in unset state")
         }
         sensorStates[sensor] = .unset

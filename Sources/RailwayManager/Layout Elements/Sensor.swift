@@ -18,22 +18,27 @@ enum SensorLocation: Comparable, Hashable {
     // Order of sensors is start, middle, end in the forward direction
     static func < (lhs: SensorLocation, rhs: SensorLocation) -> Bool {
         switch (lhs, rhs) {
-        case (start, single):   true
-        case (start, end):      true
-        case (single, start):   false
-        case (single, end):     true
-        case (end, start):      false
-        case (end, single):     false
-        default:                false
+        case (start, single):       true
+        case (start, station):      true
+        case (start, end):          true
+        case (single, start):       false
+        case (single, end):         true
+        case (station, start):      false
+        case (station, end):        true
+        case (end, start):          false
+        case (end, single):         false
+        case (end, station):        false
+        default:                    false
         }
     }
 
     static func == (lhs: SensorLocation, rhs: SensorLocation) -> Bool {
         switch (lhs, rhs) {
-        case (start, start):    true
-        case (single, single):  true
-        case (end, end):        true
-        default:                false
+        case (start, start):        true
+        case (single, single):      true
+        case (end, end):            true
+        case (station, station):    true
+        default:                    false
         }
     }
     

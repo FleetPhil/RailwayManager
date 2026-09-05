@@ -219,9 +219,6 @@ struct RailwayManager: ParsableCommand {
     }
     
     static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {
-        if input.starts(with: "x") {
-            await LayoutEventHub.shared.publish(.didPushButton(2))
-        }
         
         if input.starts(with: "sn") {            // Sensor north
             if let sensorAddress = Int(input.dropFirst(2)) {
@@ -241,9 +238,10 @@ struct RailwayManager: ParsableCommand {
                 }
             }
         }
-        if input.starts(with: "p") {
+        if input.starts(with: "x") {
             await LayoutEventHub.shared.publish(.didPushButton(3))
         }
+        
         if input.starts(with: "st") {
             await layoutManager.printStatus()
         }

@@ -164,8 +164,8 @@ class Cellar: Layout, @unchecked Sendable {
             Sensor(id: 23, address: 0, location: .start(block("N"), 10)),
             Sensor(id: 24, address: 0, location: .end(block("N"), 10)),
             
-            Sensor(id: 25, address: 0, location: .station(block("C"))),
-            Sensor(id: 26, address: 0, location: .station(block("B"))),
+            Sensor(id: 25, address: 187, location: .station(block("C"))),
+            Sensor(id: 26, address: 186, location: .station(block("B"))),
 
             Sensor(id: 27, address: 0, location: .station(block("H"))),
             Sensor(id: 28, address: 0, location: .station(block("J"))),

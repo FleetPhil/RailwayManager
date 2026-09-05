@@ -156,8 +156,6 @@ actor LayoutManager: Sendable {
             return
         }
 
-        log.info("Set layout state to \(newState)")
-        
         switch newState {
         case .dormant:
             if self.layoutState == .dormant {
@@ -216,13 +214,14 @@ actor LayoutManager: Sendable {
 
         await trackStateService.trainController.stopAllTrains()
 
+        layoutState = .dormant
+        shutdownTask = nil
+
         for signal in layout.signals {
             try? await trackStateService.setSignalState(signal, home: .off, distant: .off)
             try? await Task.sleep(for: .milliseconds(100))
         }
         
-        layoutState = .dormant
-        shutdownTask = nil
         log.info("Layout is now dormant")
     }
     
@@ -233,7 +232,6 @@ actor LayoutManager: Sendable {
             
         // MARK: Check for events that change the track or signal state
         case .didFreeResource(let resource):
-            log.info("Freed resource \(resource)")
             switch resource {
             case .block(let block):
                 // Free any points associated with this route
@@ -275,10 +273,11 @@ actor LayoutManager: Sendable {
                 try await MQTTManager.shared.disconnect()
 
             case 3:
-                // Stop all trains & reset
-                await trackStateService.trainController.stopAllTrains()
-                try await trackStateService.reset()
-
+                // Stop all trains & shut down
+                await completeShutdown()
+                try? await MQTTManager.shared.disconnect()
+                exit(0)
+                
             case 5:     // Touch sensor
                 break
                 

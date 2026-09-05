@@ -103,6 +103,10 @@ actor LayoutTrainController {
     }
     
     func setTrainState(_ train: Train, state: TrainRuntimeState) async throws {
+        if state == trainStates[train] { return }
+        
+        log.debug("Train state from \(trainStates[train], default: "none") to \(state)")
+        
         trainStates[train] = state
         
         try await MQTTManager.shared.sendTrainState(train: train, state: state)
