@@ -263,7 +263,8 @@ actor RouteOperator {
         case (.rear, true, false):
             // Sensor at the back of the train is at the start of the from block in the current (new) path
             // So train is clear of the previous block and any turnouts etc
-            try await processVacatedBlock(train: train)
+            // There could be more than 1 vacating block, only vacate the one where the sensor is
+            try await processVacatedBlock(train: train, block: pathItem.fromBlock)
             
         case (.front, false, true):
             // Sensor is at the front of the train at the end of the to block
@@ -480,11 +481,9 @@ actor RouteOperator {
     }
     
     // The train has exited the toBlock on the previous path item
-    private func processVacatedBlock(train: Train) async throws {
-        if let vacatedBlock = await stateService.vacatingBlockForTrain(train) {
-            try await stateService.setStateForBlock(vacatedBlock, newState: .vacant)
-            try await stateService.releaseDirectionLock(block: vacatedBlock, train: train)
-        }
+    private func processVacatedBlock(train: Train, block: Block) async throws {
+        try await stateService.setStateForBlock(block, newState: .vacant)
+        try await stateService.releaseDirectionLock(block: block, train: train)
     }
         
     private func validForStart(route: Route) -> Bool {

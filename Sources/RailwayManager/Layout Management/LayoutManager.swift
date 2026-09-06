@@ -252,15 +252,15 @@ actor LayoutManager: Sendable {
                 try await trackStateService.setDefaultPositionforPoint(point)
             }
             
-        case .didSetSensor(let sensorAddress, let sensorOrientation):
-            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
-
-            try await trackStateService.processSensorSetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
-            
-        case .didUnsetSensor(let sensorAddress, let sensorOrientation):
-            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
-
-            try await trackStateService.processSensorUnsetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
+//        case .didSetSensor(let sensorAddress, let sensorOrientation):
+//            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
+//
+//            try await trackStateService.processSensorSetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
+//            
+//        case .didUnsetSensor(let sensorAddress, let sensorOrientation):
+//            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
+//
+//            try await trackStateService.processSensorUnsetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
 
         case .didPushButton(let button):
             log.info("Button \(button) pressed")

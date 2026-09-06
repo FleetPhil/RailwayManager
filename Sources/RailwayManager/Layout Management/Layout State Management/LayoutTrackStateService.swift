@@ -367,6 +367,7 @@ actor LayoutTrackStateService {
         blockStates.first(where: { $0.value == .vacating(train) })?.key
     }
 
+    // TODO: is this necessary? Route operator handles block state changes
     func processSensorSetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
         guard sensorStates[sensor] == .unset else {
             sensorStates[sensor] = .set

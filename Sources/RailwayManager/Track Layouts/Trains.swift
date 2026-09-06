@@ -13,9 +13,9 @@ struct Trains {
         var sbbSpeeds: [ TrainSpeed : TrainSpeedSetting ] {
             [
                 .stop :     TrainSpeedSetting(power: 0, speed: 0),
-                .slow :     TrainSpeedSetting(power: 12, speed: 12),
-                .normal :   TrainSpeedSetting(power: 20, speed: 20),
-                .fast :     TrainSpeedSetting(power: 40, speed: 40),
+                .slow :     TrainSpeedSetting(power: 30, speed: 12),
+                .normal :   TrainSpeedSetting(power: 45, speed: 20),
+                .fast :     TrainSpeedSetting(power: 60, speed: 40),
             ]
         }
         
