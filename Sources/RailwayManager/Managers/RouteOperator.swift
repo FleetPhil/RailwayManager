@@ -190,65 +190,38 @@ actor RouteOperator {
         }
     }
     
-    // MARK: - Event processing
+    // MARK: - Start route processing
     
     // Process the track event and execute route commands if able based on the layout state
-    func processEvent(_ event: LayoutEvent) async throws {
-        log.verbose("Process event: \(event), pathItem: \(currentPathItem)")
-        
-        switch (routeState, event) {
-        case (.dormant, .didStartRoute(let startedTrain)), (.ended, .didStartRoute(let startedTrain)):
-            if startedTrain == self.train {
-                log.info("\(rd): Starting route for train \(train.id) (\(train.name))")
-                
-                // Train will be commanded to move when first transition is clear
-                // Trigger processing for this block being occupied
-                
-                try await stateService.setStateForBlock(route.startBlock, newState: .occupied(startedTrain))
-                
-                routeState = .starting
-                
-                // Run the start sequence in its own task so that the delays between
-                // start functions do not block event processing for other trains
-                startSequenceTask = Task {
-                    await self.runStartSequence()
-                }
-            }
-            
-        case (.ended, .didEndRoute(let endedTrain)):
-            if endedTrain == self.train {
-                log.verbose("\(rd): Ended route for train \(self.train)")
-                routeState = .ended
-            }
-            
-        case (.starting, .didSetSensor):
-            break               // Ignore sensor events during the start sequence
-            
-        case (_, .didSetSensor(let sensorAddress, let orientation)):
-            try await handleSensorSet(sensorAddress, orientation: orientation)
-            
-        case (_, .didEndTimer(let timerRoute)):
-            if timerRoute == route.id {
-                routeState = .active
-            }
-            
-        case (_, .didFreeResource(let trackResource)):
-            try await handleFreedResource(trackResource)
-                        
-        default:
-            break                // Do nothing (unchanged state)
+    // Sensor set events are dispatched to handleSensorSet() from the layout manager
+    func handleStartRouteEvent() async throws {
+        guard [RouteState.dormant, .ended].contains(routeState) else {
+            throw TrainError.trainAlreadyActive(train.id)
         }
-   
+        
+        log.info("\(rd): Starting route for train \(train.id) (\(train.name))")
+                
+        // Train will be commanded to move when first transition is clear
+        // Trigger processing for this block being occupied
+        
+        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train))
+        
+        routeState = .starting
+        
+        // Run the start sequence in its own task so that the delays between
+        // start functions do not block event processing for other trains
+        startSequenceTask = Task {
+            await self.runStartSequence()
+        }
     }
     
     // MARK: - Sensor event handling
     
     // Dispatch a sensor event based on which end of the train tripped it and where it sits on the current path
-    private func handleSensorSet(_ sensorAddress: Int, orientation: SensorEventOrientation) async throws {
+    func handleSensorSet(_ sensor: Sensor, orientation: SensorEventOrientation) async throws {
         let pathItem = currentPathItem
         let trainSensor =
             try await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
-        guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
 
         // First update the block states
         let trainDirection = try await trainController.trainDirection(train)
@@ -342,7 +315,7 @@ actor RouteOperator {
     }
     
     // A track resource has been freed: resume if it is the one we are waiting for
-    private func handleFreedResource(_ trackResource: TrackResource) async throws {
+    func handleFreedResource(_ trackResource: TrackResource) async throws {
         switch try await trainController.trainState(train) {
         case .stoppingForResource(let freedResource), .stoppedForResource(let freedResource, _):
             if freedResource == trackResource {

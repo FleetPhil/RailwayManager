@@ -230,6 +230,12 @@ actor LayoutManager: Sendable {
         
         switch event {
             
+        case .didStartRoute(let train):
+            guard let routeOperator = routeOperators[train] else {
+                throw TrainError.applicationError("No route operator for train \(train)")
+            }
+            try await routeOperator.handleStartRouteEvent()
+            
         // MARK: Check for events that change the track or signal state
         case .didFreeResource(let resource):
             switch resource {
@@ -252,16 +258,30 @@ actor LayoutManager: Sendable {
                 try await trackStateService.setDefaultPositionforPoint(point)
             }
             
-//        case .didSetSensor(let sensorAddress, let sensorOrientation):
-//            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
-//
-//            try await trackStateService.processSensorSetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
-//            
-//        case .didUnsetSensor(let sensorAddress, let sensorOrientation):
-//            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
-//
-//            try await trackStateService.processSensorUnsetEvent(sensor: sensor, trainSensor: sensorOrientation.trainSensor)
-
+            // Send the event to route operators to check if any are waiting for the resource
+            for routeOperator in routeOperators.values {
+                try await routeOperator.handleFreedResource(resource)
+            }
+            
+        case .didSetSensor(let sensorAddress, let sensorOrientation):
+            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
+            
+            // Find the train in the sensor block
+            guard let train = try await trackStateService.trainForBlock(sensor.location.block) else {
+                throw TrainError.applicationError("Sensor \(sensor) set but no train in block \(sensor.location.block)")
+            }
+            
+            // Get the route operator for this train
+            guard let routeOperator = routeOperators[train] else {
+                throw TrainError.applicationError("No route operator for train \(train)")
+            }
+            
+            try await routeOperator.handleSensorSet(sensor, orientation: sensorOrientation)
+            
+        case .didEndTimer(let timerRoute):
+            // Currently unused
+            log.error("Unexpected end timer event")
+            
         case .didPushButton(let button):
             log.info("Button \(button) pressed")
             switch button {
@@ -311,14 +331,7 @@ actor LayoutManager: Sendable {
             
         default:        // Ignore
             break
-        }
-        
-        // Now pass event to route operators
-        if event.isRouteEvent {
-            for routeOperator in routeOperators.values {
-                try await routeOperator.processEvent(event)
-            }
-        }
+        }       
     }
     
 }

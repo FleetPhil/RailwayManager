@@ -42,16 +42,10 @@ struct PointRuntimeState: CustomStringConvertible, Sendable, Equatable {
     }
 }
 
-enum SensorRuntimeState: Sendable, Equatable, Hashable {
-    case unset
-    case set
-}
-
 actor LayoutTrackStateService {
     private var blockStates: [Block: BlockRuntimeState] = [:]
     private var pointStates: [Point : PointRuntimeState] = [:]
     private var signalStates: [Signal : (SignalState, SignalState)] = [:]
-    private var sensorStates: [Sensor : SensorRuntimeState] = [:]
     
     let trainController = LayoutTrainController()
     
@@ -81,13 +75,7 @@ actor LayoutTrackStateService {
         signalStates = layout.signals.reduce(into: [:], { result, signal in
             result[signal] = .init((.off, .off))
         })
-        
-        sensorStates = layout.sensors
-            .filter({ $0.address != 0 })
-            .reduce(into: [:], { result, sensor in
-                result[sensor] = .unset
-            })
-        
+                
         // Send MQTT updates
         for block in layout.blocks {
             try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: .vacant)
@@ -135,6 +123,17 @@ actor LayoutTrackStateService {
 
     func blockState(_ block: Block) -> BlockRuntimeState? {
         blockStates[block]
+    }
+    
+    // Return the train currently in this block
+    func trainForBlock(_ block: Block) throws -> Train? {
+        guard let blockState = blockStates[block] else {
+            throw TrainError.applicationError("No state for block \(block)")
+        }
+        switch blockState {
+        case .occupied(let train), .reserved(let train), .vacating(let train): return train
+        default: return nil
+        }
     }
     
     func setDirectionForVacantContiguousBlocks(fromBlock: Block, train: Train, direction: Direction) async throws {
@@ -361,65 +360,6 @@ actor LayoutTrackStateService {
         try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain), directionLocks: directionLocks[item.toBlock] ?? [])
         
         return nil
-    }
-    
-    func vacatingBlockForTrain(_ train: Train) -> Block? {
-        blockStates.first(where: { $0.value == .vacating(train) })?.key
-    }
-
-    // TODO: is this necessary? Route operator handles block state changes
-    func processSensorSetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
-        guard sensorStates[sensor] == .unset else {
-            sensorStates[sensor] = .set
-            throw TrainError.unexpectedSensorEvent("Sensor \(sensor) set event when in set state")
-        }
-
-        sensorStates[sensor] = .set
-
-        guard let blockState = blockStates[sensor.block] else { throw TrainError.unexpectedTrackState("No state for block \(sensor.block)") }
-        guard let train = blockState.train else { throw TrainError.noTrainForSetSensor(sensor.id) }
-        let trainDirection = try await trainController.trainDirection(train) 
-        
-        // The train end is relative to the train moving forward, so adjust if the block direction is reverse
-        let trainDirectionSensor: TrainSensor = trainDirection == .forward ? trainSensor : trainSensor.oppositePosition
-        
-        // Sensor position is also relative to direction
-
-        log.verbose("Sensor \(sensor.id) (\(sensor.location)) (\(trainDirection)) for train posn \(trainDirectionSensor)")
-        
-        switch (sensor.location.isStart(trainDirection), trainDirectionSensor) {
-        case (true, .front):
-            // Front of the train sets the first or only sensor in the block
-            switch blockState {
-            case .reserved(let train):
-                // Occupy this block
-                try await setStateForBlock(sensor.block, newState: .occupied(train))
-                
-                // Previous block will be freed when trailing sensor passes over 
-            case .occupied:
-                break
-            default:
-                log.verbose("Sensor \(sensor) set on block \(sensor.block) in state \(blockState)")
-            }
-            
-        case (true, .rear):
-            if let vacatingBlock = vacatingBlockForTrain(train) {
-                try await setStateForBlock(vacatingBlock, newState: .vacant)
-            } else {
-                throw TrainError.invalidBlockStateChange("No block for train \(train) to vacate at sensor \(sensor.id)")
-            }
-            
-        default:
-            break
-        }
-    }
-    
-    func processSensorUnsetEvent(sensor: Sensor, trainSensor: TrainSensor) async throws {
-        guard sensorStates[sensor] == .set else {
-            sensorStates[sensor] = .unset
-            throw TrainError.unexpectedSensorEvent("Sensor \(sensor) unset event when in unset state")
-        }
-        sensorStates[sensor] = .unset
     }
     
     func setDirectionForPointID(_ id: Int, newDirection: PointDirection) async throws {
