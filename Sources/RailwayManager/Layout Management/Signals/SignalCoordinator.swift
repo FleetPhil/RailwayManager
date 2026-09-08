@@ -13,7 +13,7 @@ actor SignalCoordinator {
             homeState[signal] = translate(signalIndication)
             distantState[signal] = .off     // Default value
         }
-        // Now check state of trunouts and next blocks for all green signals
+        // Now check state of turnouts and next blocks for all green signals
         for signal in homeState.filter({ $0.value == .go }).keys {
             // Check if the route out of this block contains any diverging signals before the next block
             // If so set the signal state to right or left (initial direction)

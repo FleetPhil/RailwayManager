@@ -44,6 +44,9 @@ actor CBUSManager: Sendable {
     
     private var sessionMap: [ Int : Int] = [:]        // Address : Session
     
+    private(set) var minNSet: [ Int : Int] = [:]            // Min max set value for each sensor
+    private(set) var maxSSet: [ Int : Int] = [:]            // Min max set value for each sensor
+    
     private init() { }
     
     func setup() throws {
@@ -351,6 +354,7 @@ extension CBUSManager {
             let address = Int(message[3])
             
             sessionMap[address] = session
+            log.debug("Have DCC session \(session) for address \(address)")
             
             return .didGetSession(session: session, address: address)
             
@@ -391,9 +395,20 @@ extension CBUSManager {
             let deviceID = Int(message[3]) * 256 + Int(message[4])
             let max = Int(message[6]) * 10
             let min = Int(message[7]) * 10
-            var s: String = "Sensor \(deviceID) unset: "
-            s.append(" \(Int(message[5])) readings, max: \(max), min: \(min)")
-            log.debug(s)
+            
+            if max > 1000 {         // N set
+                if max < minNSet[deviceID, default: 2000] {         // Lowest max for this device
+                    minNSet[deviceID] = max
+                }
+            } else {                // S set
+                if min > maxSSet[deviceID, default: 0] {
+                    maxSSet[deviceID] = min
+                }
+            }
+            
+//            var s: String = "Sensor \(deviceID) unset: "
+//            s.append(" \(Int(message[5])) readings, max: \(max), min: \(min)")
+//            log.debug(s)
             
             return .didUnsetSensor(deviceID, min < 1000 ? .south : .north)
             
@@ -404,6 +419,19 @@ extension CBUSManager {
         }
     }
 
+}
+
+extension CBUSManager {
+    func printSensorStats() {
+        log.debug("Sensor N Min set stats")
+        minNSet.keys.sorted().forEach({ address in
+            log.debug("\(address): \(minNSet[address]!)")
+        })
+        log.debug("Sensor S Max set stats")
+        maxSSet.keys.sorted().forEach({ address in
+            log.debug("\(address): \(maxSSet[address]!)")
+        })
+    }
 }
 
 

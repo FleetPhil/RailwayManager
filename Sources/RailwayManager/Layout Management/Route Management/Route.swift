@@ -27,6 +27,11 @@ struct Route: CustomStringConvertible, Sendable {
             }
         }
     }
+    
+    // The direction for the first segment in the route
+    var initialDirection: Direction {
+        return segments.first?.path.direction ?? .forward
+    }
 
     nonisolated var description: String {
         return "\(self.id)"

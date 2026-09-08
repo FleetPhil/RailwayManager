@@ -164,7 +164,7 @@ actor LayoutTrackStateService {
         
         // Ignore
         guard oldState != newState else { return }
-        log.verbose("Block \(block) state request from \(oldState) to \(newState)")
+        log.debug("Block \(block) state request from \(oldState) to \(newState)")
 
         switch newState {
         case .vacant:
@@ -199,7 +199,7 @@ actor LayoutTrackStateService {
         case .occupied(let newTrain):
             switch oldState {
             case .vacant:
-                log.warning("Train \(newTrain) occupies vacant block \(block)")
+                log.info("Train \(newTrain) occupies vacant block \(block)")
                 
             case .reserved:
                 break
@@ -296,10 +296,10 @@ actor LayoutTrackStateService {
         // MARK: Critical section: no awaits until all resources are marked reserved
         let oldState = blockStates[item.toBlock] ?? .vacant
         switch oldState {
-        case .vacant, .vacating:
+        case .vacant:
             break
-        case .occupied:
-            log.debug("Route \(forTrain.id) reserve fails: \(item.toBlock) state is occupied")
+        case .occupied(let train), .vacating(let train):
+            log.debug("Route \(forTrain.id) reserve fails: \(item.toBlock) state is occupied/vacating by \(train)")
             return .block(item.toBlock)
         case .reserved(let train):
             if train != forTrain {
@@ -370,7 +370,7 @@ actor LayoutTrackStateService {
         if pointStates[point]?.direction == newDirection { return }         // No change
         if newDirection == .single { return }                               // Ignore
         
-        log.info("Point \(point.id) set to \(newDirection)")
+        log.debug("Point \(point.id) set to \(newDirection)")
         
         guard var newState = pointStates[point] else {
             throw TrainError.unexpectedTrackState("No state for point \(point.id)")

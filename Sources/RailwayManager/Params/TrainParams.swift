@@ -22,6 +22,7 @@ struct TrainParams: Codable, Identifiable, Equatable {
     var id: Int
     var name: String
     var address: Int
+    var length: Int             // Length between sensors in cm
     
     var trainSpeeds: [ TrainSpeed : TrainSpeedSetting ]
     

@@ -296,6 +296,12 @@ actor LayoutManager: Sendable {
                 // Stop all trains & shut down
                 await completeShutdown()
                 try? await MQTTManager.shared.disconnect()
+                
+                // Print sensor stats
+                if !GlobalOptions.noCBUS {
+                    await CBUSManager.shared.printSensorStats()
+                }
+                
                 exit(0)
                 
             case 5:     // Touch sensor
