@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CollectionConcurrencyKit
 
 enum RouteState: Equatable {
     case dormant
@@ -14,6 +15,13 @@ enum RouteState: Equatable {
     case ending
     case ended
     case error(TrainError)
+    
+    var isInactive: Bool {
+        switch self {
+        case .dormant, .ended:      true
+        default:                    false
+        }
+    }
 }
 
 struct ItemIndex {
@@ -92,10 +100,12 @@ actor RouteOperator {
     
     // MARK: - Route lifecycle
     
-    func resetRoute() async throws {
-        guard validForStart(route: route) else {
-            throw TrainError.invalidRoute(route.id)
-        }
+    func resetRoute(route: Route) async throws {
+        self.route = route
+        
+        // Check no active route or the train is in the correct start block for this route
+        // Function throws if not
+        try await validStateForStart(route: route)
         
         // Request DCC session if necessary
         try await trainController.requestSession(for: train)
@@ -282,27 +292,8 @@ actor RouteOperator {
     private func checkForTrainStop(_ sensor: Sensor) async throws {
         // Check for the last block of the route
         if routeState == .ending {
-            // TODO: finer control depending on direction
-            try await stopTrain(after: stopDelay(sensor: sensor, direction: .forward))
-            try await setTrainState(.idle)
-            routeState = .ended
-            
-            // Free any resources owned by this train
-            // Setting the block state will trigger an event to free associated points
-            for block in layout.blocks {
-                if try await stateService.trainForBlock(block) == train {
-                    try await stateService.setStateForBlock(block, newState: .vacant)
-                }
-            }
-            
-            if let waitTime = currentWaitTime {
-                try await Task.sleep(for: .seconds(waitTime.timeInterval))
-            }
-            
-            // Turn off light
-            try await trainController.setTrainFunction(train: train, function: 0, on: false)
-            
-            await LayoutEventHub.shared.publish(.didEndRoute(train))
+            try await endRoute(atSensor: sensor)
+            return
         }
         
         // Check if we should stop at this sensor for a timer
@@ -319,6 +310,35 @@ actor RouteOperator {
             // Now move on starting with request for the next track resource
             try await processNextFrontPathItem()
         }
+    }
+    
+    // Cleanup at end of route after last sensor has been set
+    private func endRoute(atSensor: Sensor) async throws {
+        // TODO: finer control depending on direction
+        try await stopTrain(after: stopDelay(sensor: atSensor, direction: .forward))
+        try await setTrainState(.idle)
+        
+        // Free any resources owned by this train except the block with the sensor that it has stopped at
+        // Setting the block state will trigger an event to free associated points
+        for block in layout.blocks.filter({ $0 != atSensor.location.block }) {
+            if try await stateService.trainForBlock(block) == train {
+                try await stateService.setStateForBlock(block, newState: .vacant)
+            }
+        }
+        
+        if let waitTime = currentWaitTime {
+            try await Task.sleep(for: .seconds(waitTime.timeInterval))
+        }
+        
+        // Turn off light
+        try await trainController.setTrainFunction(train: train, function: 0, on: false)
+        try await Task.sleep(for: .milliseconds(100))
+        
+        // End the DCC session
+        try await trainController.releaseSession(for: train)
+
+        routeState = .ended
+        await LayoutEventHub.shared.publish(.didEndRoute(train))
     }
     
     // Return the delay before stopping for the train at this sensor and direction
@@ -518,23 +538,28 @@ actor RouteOperator {
         }
     }
         
-    private func validForStart(route: Route) -> Bool {
+    // Return if valid or throw if not
+    private func validStateForStart(route: Route) async throws {
         switch routeState {
         case .dormant:
-            return true
+            return          // Never run
             
         case .starting, .active:          // Unexpected
-            log.error("\(rd): \(route): Run route \(route.id) but already in running state")
-            return false
+            throw TrainError.invalidRoute("\(rd): \(route): Run route \(route.id) but already in running state")
         case .error:
-            log.error("\(rd): \(route): Attempt to run segment in error state: ends")
-            return false
-        case .ending, .ended:
-            log.error("\(rd): \(route): Attempt to run segment in ended state: ends")
-            return false
+            throw TrainError.invalidRoute("\(rd): \(route): Attempt to run route in error state")
+        case .ending:
+            throw TrainError.invalidRoute("\(rd): \(route): Attempt to run route in ending state")
+        case .ended:
+            // check the train is in the correct start block
+            if let trainBlock = await stateService.occupiedBlockForTrain(train) {
+                if try route.startBlock != trainBlock {
+                    throw TrainError.invalidRoute("\(rd): \(route): Can't run route: train \(train) is in block \(trainBlock) but route starts in \(try! route.startBlock)")
+                }
+            }
+            log.debug("Route \(route) start block \(try! route.startBlock) valid for train \(train)")
         }
     }
-    
 }
 
 extension TimeInterval {

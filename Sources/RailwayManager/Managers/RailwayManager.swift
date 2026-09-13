@@ -177,6 +177,8 @@ struct RailwayManager: ParsableCommand {
                             try await runRoute(from: routeParams, layoutManager: layoutManager)
                         case .stopAllTrains:
                             await LayoutEventHub.shared.publish(.stopAllTrainsResetTrack)
+                        case .endManager:
+                            await LayoutEventHub.shared.publish(.didPushButton(3))  // End manager
                         }
                         
                     } catch {
@@ -199,7 +201,7 @@ struct RailwayManager: ParsableCommand {
         }
         
         guard routeParams.segments.isEmpty == false else {
-            throw TrainError.invalidRoute(routeParams.routeID)
+            throw TrainError.invalidRoute("Route \(routeParams.routeID) invalid: no segments")
         }
         
         var segments: [Segment] = []

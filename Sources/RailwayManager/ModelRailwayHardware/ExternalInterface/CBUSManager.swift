@@ -351,10 +351,16 @@ extension CBUSManager {
             guard hasBytes(4) else { return nil }
             // Add to session map
             let session = Int(message[1])
-            let address = Int(message[3])
-            
+            var address = Int(message[3])
+
+            if address < 20 && Int(message[2]) >= 20 {
+                log.warning("Have PLOC values \(message.map { $0 })")
+                address = Int(message[2])
+            }
+
             sessionMap[address] = session
             log.debug("Have DCC session \(session) for address \(address)")
+            
             
             return .didGetSession(session: session, address: address)
             
@@ -396,19 +402,19 @@ extension CBUSManager {
             let max = Int(message[6]) * 10
             let min = Int(message[7]) * 10
             
-            if max > 1000 {         // N set
+            if max > 1200 {         // N set
                 if max < minNSet[deviceID, default: 2000] {         // Lowest max for this device
                     minNSet[deviceID] = max
                 }
-            } else {                // S set
+            } else if min < 900 {                // S set
                 if min > maxSSet[deviceID, default: 0] {
                     maxSSet[deviceID] = min
                 }
             }
             
-//            var s: String = "Sensor \(deviceID) unset: "
-//            s.append(" \(Int(message[5])) readings, max: \(max), min: \(min)")
-//            log.debug(s)
+            var s: String = "Sensor \(deviceID) unset: "
+            s.append(" \(Int(message[5])) readings, max: \(max), min: \(min)")
+            log.debug(s)
             
             return .didUnsetSensor(deviceID, min < 1000 ? .south : .north)
             

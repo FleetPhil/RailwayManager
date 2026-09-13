@@ -82,7 +82,7 @@ struct CBUSMessage {
             case .RLOC:     CBUSMessage(opCode: .ASON, address: Int(m[1]))
             case .PLOC:     CBUSMessage(opCode: .PLOC, address: Int(m[3]), session: Int(m[1]))
             case .GLOC:     CBUSMessage(opCode: .GLOC, address: Int(m[2]), dataBytes: [m[3]])
-            case .KLOC:     CBUSMessage(opCode: .KLOC)
+            case .KLOC:     CBUSMessage(opCode: .KLOC, session: Int(m[1]))
             case .STMOD:    CBUSMessage(opCode: .STMOD)
             case .DKEEP:    CBUSMessage(opCode: .DKEEP)
             case .DSPD:     CBUSMessage(opCode: .DSPD, session: Int(m[1]),

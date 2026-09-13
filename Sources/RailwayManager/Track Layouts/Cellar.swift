@@ -37,7 +37,7 @@ class Cellar: Layout, @unchecked Sendable {
             Point(id: 6, address: 58, orientation: .left),
             Point(id: 7, address: 51, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
             Point(id: 8, address: 53, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
-            Point(id: 9, address: 50, orientation: .right),
+            Point(id: 9, address: 56, orientation: .right),
         ]
         
         point(1).setConnection(from: .single, to: .point(point(2), .single))
@@ -149,8 +149,8 @@ class Cellar: Layout, @unchecked Sendable {
             Sensor(id: 13, address: 161, location: .start(block("H"), 10)),
             Sensor(id: 14, address: 202, location: .end(block("H"), 10)),
 
-            Sensor(id: 15, address: 0, location: .start(block("J"), 10)),
-            Sensor(id: 16, address: 0, location: .end(block("J"), 10)),
+            Sensor(id: 15, address: 165, location: .start(block("J"), 10)),
+            Sensor(id: 16, address: 206, location: .end(block("J"), 10)),
 
             Sensor(id: 17, address: 201, location: .start(block("K"), 10)),
             Sensor(id: 18, address: 181,location: .end(block("K"), 10)),
@@ -161,14 +161,14 @@ class Cellar: Layout, @unchecked Sendable {
             Sensor(id: 21, address: 185, location: .start(block("M"), 10)),
             Sensor(id: 22, address: 203, location: .end(block("M"), 10)),
 
-            Sensor(id: 23, address: 0, location: .start(block("N"), 10)),
-            Sensor(id: 24, address: 0, location: .end(block("N"), 10)),
+            Sensor(id: 23, address: 205, location: .start(block("N"), 10)),
+            Sensor(id: 24, address: 204, location: .end(block("N"), 10)),
             
             Sensor(id: 25, address: 187, location: .station(block("C"))),
             Sensor(id: 26, address: 186, location: .station(block("B"))),
 
-            Sensor(id: 27, address: 0, location: .station(block("H"))),
-            Sensor(id: 28, address: 0, location: .station(block("J"))),
+//            Sensor(id: 27, address: 0, location: .station(block("H"))),
+//            Sensor(id: 28, address: 0, location: .station(block("J"))),
         ]
         buildLayout()
     }

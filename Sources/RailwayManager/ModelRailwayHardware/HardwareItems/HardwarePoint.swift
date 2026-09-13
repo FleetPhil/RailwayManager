@@ -60,6 +60,8 @@ public final class DCCHardwarePoint: HardwarePoint, Sendable, CustomStringConver
         
         let command = dccPointCommand(address: address, direction: setDirection)
         try await CBUSManager.shared.sendCBUSMessage(CBUSMessage(opCode: .RDCC3, address: address, dataBytes: command))
+        
+        try await Task.sleep(for: .milliseconds(200))
     }
     
     public func resetPoint(_ id: PointID, toDirection direction: PointDirection) async throws {

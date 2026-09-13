@@ -9,30 +9,44 @@ actor LayoutTrainController {
     }
 
     func activateSession(_ session: Int, forAddress address: Int) async {
-        guard let train = await dccSessionStore.train(forAddress: address) else { return }
+        
+        
+        
+        guard let train = await dccSessionStore.train(forAddress: address) else {
+            log.debug("DCC: Can't activate session: no train for address \(address)")
+            return
+        }
         await dccSessionStore.setActive(train, session: session)
+        
+        log.debug("DCC: Session active and train \(train) idle for address \(address)")
         
         trainStates[train] = .idle
     }
     
     func stealSession(address: Int) async throws  {
-        log.verbose("Steal: sending GLOC for train address \(address)")
+        log.verbose("DCC: Steal: sending GLOC for train address \(address)")
         try await CBUSManager.shared.stealSession(address: address)
+        
+        
     }
 
 
     func requestSession(for train: Train) async throws {
         if await dccSessionStore.session(for: train) != nil {
+            log.debug("DCC: Session already active for train \(train)")
             return
         }
         
         await dccSessionStore.setAwaiting(train)
-        log.verbose("Sending RLOC for train address \(train.address)")
+        log.debug("DCC: Sending RLOC for train address \(train.address)")
         try await CBUSManager.shared.requestSession(forAddress: train.address)
     }
 
     func releaseSession(for train: Train) async throws {
-        guard let session = await dccSessionStore.session(for: train) else { return }
+        guard let session = await dccSessionStore.session(for: train) else {
+            log.debug("DCC: No session to release for train \(train)")
+            return
+        }
         try await CBUSManager.shared.releaseSession(session)
         await dccSessionStore.setDormant(train)
     }

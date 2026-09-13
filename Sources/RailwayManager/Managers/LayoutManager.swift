@@ -59,6 +59,8 @@ actor LayoutManager: Sendable {
                     // Enter the error state via setState so trains are stopped and LEDs set
                     // TODO: ignore spurious sensors
 //                    try? await self.setState(.error)
+                    
+                    try! await CBUSManager.shared.stopAllTrains()
                 }
             }
         })
@@ -126,8 +128,22 @@ actor LayoutManager: Sendable {
     }
 
     func runRoute(route: Route, train: Train) async throws {
-        guard routeOperators[train] == nil else {
-            throw TrainError.trainAlreadyActive(train.id)
+        // Look for an existing inActive route operator for this train
+        if let routeOperator = routeOperators[train] {
+            if await !routeOperator.routeState.isInactive {
+                throw TrainError.trainAlreadyActive(train.id)
+            }
+        } else {
+            // No route operator for this train
+            log.debug("Creating route operator for train \(train.name) (\(train))")
+            let routeOperator = try await RouteOperator(
+                route: route,
+                train: train,
+                layout: layout,
+                stateService: trackStateService,
+                trainController: trackStateService.trainController
+            )
+            self.routeOperators[train] = routeOperator
         }
         
         log.info("Route \(route.id) running with train \(train.name)")
@@ -135,15 +151,7 @@ actor LayoutManager: Sendable {
         // OK all looking good
         try await setState(.running)
         
-        let routeOperator = try await RouteOperator(
-            route: route,
-            train: train,
-            layout: layout,
-            stateService: trackStateService,
-            trainController: trackStateService.trainController
-        )
-        self.routeOperators[train] = routeOperator
-        try await routeOperator.resetRoute()
+        try await routeOperators[train]!.resetRoute(route: route)
         
         await LayoutEventHub.shared.publish(.didStartRoute(train))
     }
@@ -313,10 +321,19 @@ actor LayoutManager: Sendable {
             
         case .didEndRoute(let train):
             log.info("Train \(train) ended")
+
+            var isActiveRouteOperators: Bool {
+                get async {
+                    for routeOperator in routeOperators.values {
+                        if routeOperator.routeState.isInactive == false {
+                            return true
+                        }
+                    }
+                    return false            // No active operators
+                }
+            }
             
-            routeOperators[train] = nil
-            
-            if self.routeOperators.isEmpty {
+            if await isActiveRouteOperators == false {
                 log.info("No active route operators: setting dormant state")
                 try await setState(.dormant)
             }

@@ -40,6 +40,13 @@ struct PointRuntimeState: CustomStringConvertible, Sendable, Equatable {
         if let freeWithBlock { result.append(", free with \(freeWithBlock)") }
         return result
     }
+    
+    // Return a new struct with just the direction changed
+    func newStateWithDirection(_ direction: PointDirection) -> Self {
+        return PointRuntimeState(direction: direction,
+                                 reservedByTrain: self.reservedByTrain,
+                                 freeWithBlock: self.freeWithBlock)
+    }
 }
 
 actor LayoutTrackStateService {
@@ -68,6 +75,8 @@ actor LayoutTrackStateService {
             result[point] = .init(direction: .single, reservedByTrain: nil)
             
         })
+        
+        // Reset all points to default position or straight
         for point in layout.points {
             try await resetPoint(point)
         }
@@ -225,7 +234,8 @@ actor LayoutTrackStateService {
         case .vacating(let vacatingTrain):
             switch oldState {
             case .vacant:
-                throw TrainError.invalidBlockStateChange("Train \(vacatingTrain) can't vacate \(block): block is vacant")
+                log.warning("Train \(vacatingTrain) can't vacate \(block): block is vacant")
+                // No further action
             case .reserved:
                 throw TrainError.invalidBlockStateChange("Train \(vacatingTrain) can't vacate reserved block \(block)")
             case .occupied(let train), .vacating(let train):
@@ -362,20 +372,18 @@ actor LayoutTrackStateService {
         return nil
     }
     
-    func setDirectionForPointID(_ id: Int, newDirection: PointDirection) async throws {
-        try await setDirectionForPoint(layout.point(id), newDirection: newDirection)
-    }
-    
-    func setDirectionForPoint(_ point: Point, newDirection: PointDirection) async throws {
-        if pointStates[point]?.direction == newDirection { return }         // No change
+    // Override == true will set the direction regardless of the current setting (for reset)
+    func setDirectionForPoint(_ point: Point, newDirection: PointDirection, override: Bool = false) async throws {
+        if !override {
+            if pointStates[point]?.direction == newDirection { return }         // No change
+        }
         if newDirection == .single { return }                               // Ignore
         
         log.debug("Point \(point.id) set to \(newDirection)")
         
-        guard var newState = pointStates[point] else {
+        guard let newState = pointStates[point]?.newStateWithDirection(newDirection) else {
             throw TrainError.unexpectedTrackState("No state for point \(point.id)")
         }
-        newState.direction = newDirection
         pointStates[point] = newState
         
         try await point.setDirection(newDirection)
@@ -385,9 +393,9 @@ actor LayoutTrackStateService {
         try? await MQTTManager.shared.sendPointState(point: point, state: newDirection, associatedBlock: associatedBlock)
     }
     
-    // Reset point to default condition or straight
+    // Reset point to default condition or straight, override will set regardless of current stored state
     func resetPoint(_ point: Point) async throws {
-        try await setDirectionForPoint(point, newDirection: point.defaultPosition ?? .splitStraight)
+        try await setDirectionForPoint(point, newDirection: point.defaultPosition ?? .splitStraight, override: true)
     }
 
     func setDefaultPositionforPoint(_ point: Point) async throws {

@@ -9,7 +9,7 @@ import Foundation
 
 enum TrainError: Error, Equatable {
     case unexpectedTrackState(String)
-    case invalidRoute(Int)
+    case invalidRoute(String)
     case invalidSensor(Int)
     case invalidPath(String)
     case noStartBlockForRoute(Int)
