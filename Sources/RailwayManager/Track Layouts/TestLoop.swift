@@ -9,12 +9,21 @@ import Foundation
 
 // Test layout with a reversing loop, for running without hardware (-noCBUS).
 //
-//  S ──── A ──── p1 ─── straight ─── B ─── C
-//                  └─── branch ───────────┘
+//                                 ║ gap
+//  S ──── A ──── p1 ─── straight ─║── B ─── C
+//                  └─── branch ───║────────┘
+//                                 ║ gap
 //
 // S is a stub (buffer stop at its reverse end). A joins the single leg of point 1.
 // B and C form the loop: a train running A → B → C forward returns through the branch
 // leg of point 1 into A travelling reverse (the loop closure), then on into S.
+//
+// Track breaks: insulated gaps in both rails on both legs of point 1, on the loop side of the
+// point (where the straight leg meets B and the branch leg meets C). B + C form the reversing
+// section, fed from the auto-reverser, with no gap between B and C. S, A and point 1 are on the
+// normal DCC feed. The section must be longer than the longest train (checkLoopLengths checks
+// the train against B + C), and no train should stop straddling a gap.
+//
 // Addresses are dummies: this layout is not wired to hardware.
 
 // Sendable is safe as no changes are made to the layout topology once init is complete
