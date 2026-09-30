@@ -39,7 +39,7 @@ extension Signal {
         guard let signalBlockState =  snapshot.blockState(location) else { return .unexpectedState }
         switch signalBlockState {
         // TODO: reserved block signal should check if train is stopping
-        case .occupied(let train):
+        case .occupied(let train, _):
             // Check the block direction
             guard let signalBlockDirection = snapshot.travelDirection(in: self.location) else { return .unexpectedState }
             if signalBlockDirection != self.direction {
@@ -72,7 +72,7 @@ extension Signal {
             case .vacant:
                 return .signalBlockOccupiedIndicatedBlockVacant
             
-            case .reserved(let reservedTrain):
+            case .reserved(let reservedTrain, _):
                 if reservedTrain == train { return .signalBlockOccupiedIndicatedBlockVacant }
                 
                 // reserved for another route - check the direction

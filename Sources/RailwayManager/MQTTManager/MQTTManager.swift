@@ -165,13 +165,13 @@ actor MQTTManager: Sendable {
         switch blockState {
         case .vacant:
             itemState = "vacant"
-        case .reserved(let train):
+        case .reserved(let train, _):
             itemState = "reserved"
             additionalInformation = "Train \(train)"
-        case .occupied(let train):
+        case .occupied(let train, _):
             itemState = "occupied"
             additionalInformation = "Train \(train)"
-        case .vacating(let train):
+        case .vacating(let train, _):
             itemState = "vacating"
             additionalInformation = "Train \(train)"
         }

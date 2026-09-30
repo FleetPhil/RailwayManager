@@ -111,10 +111,9 @@ actor RouteOperator {
         try await trainController.requestSession(for: train)
         
         // Update the block and train status
-        let routeDirection = route.segments.first?.path.direction
-        try await trainController.setTrainDirection(train, direction: routeDirection ?? .forward)
+        try await trainController.setTrainDirection(train, direction: route.initialDirection)
         try await stateService.setStateForTrain(train, state: .idle)
-        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train))
+        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, route.initialDirection))
         
         // Will be incremented at route start
         currentItemIndex[.front] = ItemIndex(segmentIndex: 0, pathItemIndex: -1)
@@ -230,7 +229,7 @@ actor RouteOperator {
         // Train will be commanded to move when first transition is clear
         // Trigger processing for this block being occupied
         
-        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train))
+        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, route.initialDirection))
         
         routeState = .starting
         
@@ -384,7 +383,7 @@ actor RouteOperator {
         default:
             // Nothing to do, the train is not stopping at the end of this block
             // Set the block state to vacating
-            try await stateService.setStateForBlock(sensor.block, newState: .vacating(train))
+            try await stateService.setStateForBlock(sensor.block, newState: .vacating(train, pathItem.fromDirection))
         }
     }
     
@@ -416,8 +415,8 @@ actor RouteOperator {
         }
         
         // Set the state on the vacating block and the occupied block
-        try await stateService.setStateForBlock(currentPathItem(.front).fromBlock, newState: .vacating(train))
-        try await stateService.setStateForBlock(currentPathItem(.front).toBlock, newState: .occupied(train))
+        try await stateService.setStateForBlock(currentPathItem(.front).fromBlock, newState: .vacating(train, currentPathItem(.front).fromDirection))
+        try await stateService.setStateForBlock(currentPathItem(.front).toBlock, newState: .occupied(train, currentPathItem(.front).toDirection))
         
         // Check if we are stopping in this block, if not just carry on
         // We are stopping if this is the last pathItem in the segment and a wait time has been defined
@@ -462,8 +461,13 @@ actor RouteOperator {
         if let nextIndex = nextPathItemIndex(.front) {
             currentItemIndex[.front] = nextIndex
             
-            // Check for change in direction (setDirection will return if no change)
-            try await trainController.setTrainDirection(train, direction: currentSegment(.front).path.direction)
+            // Check for change in direction: a new segment in the opposite direction reverses the train,
+            // which reverses its travel direction in every block it holds
+            let newDirection = currentSegment(.front).path.direction
+            if try await trainController.trainDirection(train) != newDirection {
+                try await trainController.setTrainDirection(train, direction: newDirection)
+                await stateService.reverseTravelDirection(of: train)
+            }
         } else {
             routeState = .ending
             return      // No more
@@ -493,7 +497,7 @@ actor RouteOperator {
         }
         
         // No blocking resource: update the state to reflect the new item
-        try await stateService.setStateForBlock(item.fromBlock, newState : .occupied(train))
+        try await stateService.setStateForBlock(item.fromBlock, newState : .occupied(train, item.fromDirection))
         try await setTrainSpeed(inBlock: item.fromBlock)
         
         return .active
