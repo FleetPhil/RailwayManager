@@ -32,16 +32,6 @@ enum SensorLocation: Comparable, Hashable {
         }
     }
 
-    static func == (lhs: SensorLocation, rhs: SensorLocation) -> Bool {
-        switch (lhs, rhs) {
-        case (start, start):        true
-        case (single, single):      true
-        case (end, end):            true
-        case (station, station):    true
-        default:                    false
-        }
-    }
-    
     // True if the start or only sensor in the block in the specified direction
     func isStart(_ direction: Direction) -> Bool {
         switch self {

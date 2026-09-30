@@ -94,14 +94,6 @@ actor LayoutTrackStateService {
             try? await MQTTManager.shared.sendSignalState(signal: signal, state: .off)
         }
         
-        // Send keepalive for active sessions
-        Task {
-            while(true) {
-                try? await trainController.sendKeepAlives()
-                try! await Task.sleep(for: .seconds(3))
-            }
-        }
-
     }
 
     func signalState(_ signal: Signal) async throws -> (SignalState, SignalState) {

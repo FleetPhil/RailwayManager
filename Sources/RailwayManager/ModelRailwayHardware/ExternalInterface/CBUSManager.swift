@@ -44,6 +44,11 @@ actor CBUSManager: Sendable {
     
     private var sessionMap: [ Int : Int] = [:]        // Address : Session
     
+    // Delayed speed commands waiting to be sent, one per DCC session.
+    // Any later command for the session cancels the pending one, so a delayed
+    // speed can never be sent after (and so override) a more recent stop
+    private var pendingSpeedCommands: [ Int : Task<Void, Never> ] = [:]      // Session : Task
+    
     private(set) var minNSet: [ Int : Int] = [:]            // Min max set value for each sensor
     private(set) var maxSSet: [ Int : Int] = [:]            // Min max set value for each sensor
     private(set) var minNReadings: [ Int : Int ] = [:]      // Min N readings
@@ -104,18 +109,44 @@ actor CBUSManager: Sendable {
         // OK, all ready - power the train after an optional interval
         let cbus = CBUSMessage(opCode: .DSPD, session: session, direction: direction, speed: speed)
         
+        // This command supersedes any delayed command still waiting for this session
+        cancelPendingSpeedCommand(session: session)
+        
         if delay == 0 {
             try sendCBUSMessage(cbus)
         } else {
-            Task {
-                try await Task.sleep(for: .seconds(delay))
-                try sendCBUSMessage(cbus)
+            pendingSpeedCommands[session] = Task {
+                do {
+                    try await Task.sleep(for: .seconds(delay))
+                } catch {
+                    return          // Cancelled: superseded by a later command
+                }
+                // No suspension between this check and the send, so a newer
+                // command cannot slip in between them
+                guard !Task.isCancelled else { return }
+                pendingSpeedCommands[session] = nil
+                do {
+                    try sendCBUSMessage(cbus)
+                } catch {
+                    log.error("Delayed speed command for session \(session) failed: \(error)")
+                }
             }
         }
     }
     
+    private func cancelPendingSpeedCommand(session: Int) {
+        pendingSpeedCommands[session]?.cancel()
+        pendingSpeedCommands[session] = nil
+    }
+    
     // Track-wide DCC emergency stop (CBUS RSTOP/RESTP)
     func stopAllTrains() throws {
+        // Drop every delayed speed command so no train restarts after the stop
+        for task in pendingSpeedCommands.values {
+            task.cancel()
+        }
+        pendingSpeedCommands.removeAll()
+        
         try sendCBUSMessage(CBUSMessage(opCode: .STOP))
     }
     
@@ -138,6 +169,7 @@ actor CBUSManager: Sendable {
     }
     
     func releaseSession(_ session: Int) throws {
+        cancelPendingSpeedCommand(session: session)
         try sendCBUSMessage(CBUSMessage(opCode: .KLOC, session: session))
     }
     

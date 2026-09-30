@@ -61,7 +61,14 @@ actor LayoutManager: Sendable {
                         try await self.processEvent(event)
                     } catch {
                         log.warning("Failed to process event \(event): \(error)")
-                        try! await CBUSManager.shared.stopAllTrains()
+                        do {
+                            try await CBUSManager.shared.stopAllTrains()
+                        } catch {
+                            // Can't reach the command station: show the error (red LED)
+                            // and try stopping trains individually rather than crashing
+                            log.error("Emergency stop failed: \(error)")
+                            try? await self.setState(.error)
+                        }
                     }
                 }
             }
@@ -78,14 +85,8 @@ actor LayoutManager: Sendable {
         // Set up Keepalive
         backgroundTasks.append(Task {
             while !Task.isCancelled {
-                do {
-                    try await trackStateService.trainController.sendKeepAlives()
-                } catch is CancellationError {
-                    break
-                } catch {
-                    log.error("Keep-alive error: \(error)")
-                }
-                // Always sleep, even after a failure, to avoid a tight retry loop
+                // Per-session failures are logged inside sendKeepAlives
+                await trackStateService.trainController.sendKeepAlives()
                 do {
                     try await Task.sleep(for: .seconds(self.keepAliveInterval))
                 } catch {

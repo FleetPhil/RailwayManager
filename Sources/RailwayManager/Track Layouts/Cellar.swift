@@ -37,7 +37,7 @@ class Cellar: Layout, @unchecked Sendable {
             Point(id: 6, address: 58, orientation: .left),
             Point(id: 7, address: 51, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
             Point(id: 8, address: 53, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
-            Point(id: 9, address: 56, orientation: .right),
+            Point(id: 9, address: 57, orientation: .right),
         ]
         
         point(1).setConnection(from: .single, to: .point(point(2), .single))

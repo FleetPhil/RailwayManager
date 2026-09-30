@@ -123,10 +123,16 @@ actor LayoutTrainController {
         try await MQTTManager.shared.sendTrainState(train: train, state: state)
     }
     
-    func sendKeepAlives() async throws {
+    // Send a keep-alive to every active session, best effort: a failure for one
+    // session must not prevent the others from being kept alive
+    func sendKeepAlives() async {
         for session in await dccSessionStore.activeSessions() {
-            try await CBUSManager.shared.sendKeepAlive(session: session)
-      }
+            do {
+                try await CBUSManager.shared.sendKeepAlive(session: session)
+            } catch {
+                log.error("Keep-alive failed for session \(session): \(error)")
+            }
+        }
     }
     
     func setSpeedforTrain(_ train: Train,

@@ -175,8 +175,10 @@ actor RouteOperator {
         }
     }
     
-    // Stop the train after optional delay
+    // Stop the train immediately
     private func stopTrain() async throws {
+        // Record the stop so the next speed calculation always sends a fresh command
+        lastCommandedTrainSpeed = .stop
         try await trainController.setSpeedforTrain(train, speed: .stop)
     }
     
@@ -468,7 +470,7 @@ actor RouteOperator {
         }
 
         // Allocate resources to the next block
-        if let blockingResource = try await reserveOrRun(currentPathItem(.front), resumeSpeed: lastCommandedTrainSpeed) {
+        if let blockingResource = try await reserveOrRun(currentPathItem(.front)) {
             try await stateService.setStateForTrain(train, state: .stoppingForResource(blockingResource))
         } else {
             // Set the points on this path without default values
@@ -483,10 +485,11 @@ actor RouteOperator {
     }
     
     private func requestPathItem(_ item: PathItem) async throws -> RouteState {
-        if let blockingResource = try await reserveOrRun(item, resumeSpeed: .normal) {
+        if let blockingResource = try await reserveOrRun(item) {
             // Stop the train if it is moving (normally stopped) and wait for the resource to be freed
             try await stopTrain()
             try await setTrainState(.stoppedForResource(blockingResource, item))
+            return routeState       // Still waiting: leave the route state unchanged
         }
         
         // No blocking resource: update the state to reflect the new item
@@ -497,8 +500,8 @@ actor RouteOperator {
     }
     
     // Try to reserve the path item, returning the blocking resource if the reservation failed.
-    // Otherwise power the route at the given speed and return nil
-    private func reserveOrRun(_ item: PathItem, resumeSpeed: TrainSpeed) async throws -> TrackResource? {
+    // Otherwise set the speed for the path item, mark the train running and return nil
+    private func reserveOrRun(_ item: PathItem) async throws -> TrackResource? {
         if let blockingResource = try await stateService.reservePathItem(item, forTrain: train) {
             return blockingResource
         }

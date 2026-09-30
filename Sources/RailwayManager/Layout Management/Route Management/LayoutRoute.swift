@@ -21,16 +21,8 @@ extension Layout {
         // Check for no route
         if blocks.isEmpty { throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)") }
         
-        // If not empty the array must contain at least 2 blocks (from & to)
-
-        // Check a route exists in this direction
-        if blockRoutes.first(where: {
-            $0.fromBlock.id == blocks[0] &&
-            $0.toBlock.id == blocks[1] &&
-            $0.direction == direction
-        }) == nil {
-            if blocks.isEmpty { throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)") }
-        }
+        // If not empty the array must contain at least 2 blocks (from & to).
+        // Each transition is checked against blockRoutes by pathItemForTransition(), which throws if missing
         
         var pathItems: [PathItem] = []
         var index: Int = 0

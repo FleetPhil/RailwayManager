@@ -1,6 +1,6 @@
 # RailwayManager — Architecture Summary
 
-_Snapshot of the codebase as of 30 Sep 2026 (HEAD `a36a2c1` "Releases route operator at end of route…"). Intended as the baseline for future changes._
+_Snapshot of the codebase as of 30 Sep 2026 (HEAD `e52c46b` "Commit outstanding changes"). Intended as the baseline for future changes._
 
 ## 1. What it is
 
@@ -73,7 +73,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 ### Background tasks (started in `LayoutManager.init`)
 1. Event loop over `LayoutEventHub`.
 2. CBUS event pump → `LayoutEventHub`.
-3. DCC keep-alive every 3 s.
+3. DCC keep-alive every 3 s (the only keep-alive loop; each session's failure is logged without stopping the rest).
 4. Signal refresh every 0.2 s (only when not dormant).
 
 ## 4. Domain model
@@ -118,7 +118,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
    - front at end of `fromBlock` while still waiting → stop (`stoppedForResource`/`stoppedAtSensor`) or mark vacating;
    - rear at start of `toBlock` → previous block vacant, direction lock released, advance **rear** index.
 5. `didFreeResource` → every operator waiting on that resource retries (`requestPathItem`).
-6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (stop→slow, diverging→normal, distant stop→normal, else fast).
+6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (stop→slow, diverging→normal, distant stop→normal, else fast). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `requestPathItem` stops the train and returns without touching speed or route state.
 7. Stops: last path item of a segment with a `waitTime` stops at the block's station sensor (delay = half train length / speed) or its end sensor. Last segment → `.ending` → `endRoute`: stop, idle, free all other blocks held by the train, wait, light off, release session, `.ended`, publish `didEndRoute`.
 8. When no operators are active, `LayoutManager` schedules a **dormant** shutdown after 10 s (cancelled if a route starts): stop trains, signals off.
 
@@ -135,24 +135,18 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
   - In: ASON1/ASOF1 (sensor set/unset with orientation), PLOC, ERR, STAT, ASOF3 (sensor statistics).
 - **MQTT** topics: `railway/state` (JSON `LayoutItemState`), `railway/topology` (block end-signals, signal locations, points), `railway/route` (incoming `RouteParams`). Default broker `192.168.86.56:1883` (env `MQTT_HOST`/`MQTT_PORT` or CLI).
 - **Console** (macOS): `sn<addr>` / `ss<addr>` simulate a north/south sensor pulse, `x` = shutdown (button 3), `st` = print status.
-- **LEDs**: blue = dormant, green = running (slow flash = ending), red = error. No-op on macOS.
+- **LEDs**: blue = dormant, green = running (slow flash = ending), red = error. No-op on macOS; elsewhere driven via `CBUSManager.setLED` (currently an empty stub).
 
 ## 8. Error handling
 - `TrainError` cases each flagged `isFatal`. In `runManager` a fatal error sets layout `.error` and `fatalError`s; route requests from MQTT that fail are logged and skipped.
-- Any error inside `processEvent` triggers a CBUS emergency stop (`try!`).
+- Any error inside `processEvent` triggers a CBUS emergency stop. If that fails (CBUS unreachable) the error is logged and the layout enters `.error` (red LED, individual stops attempted) instead of crashing.
+- Delayed speed commands are held per DCC session in `CBUSManager.pendingSpeedCommands`. Any newer speed/stop for the session, a session release, or an emergency stop cancels the pending one, so a delayed speed can never override a later stop.
 - Telemetry failures are swallowed (`try?`) so they never fail a state change.
 
 ## 9. Known issues, loose ends & risks (candidates for future changes)
 
 **Likely bugs**
-1. **Duplicate keep-alive loops** – `LayoutTrackStateService.reset()` spawns an infinite keep-alive `Task` on every reset (in addition to the one in `LayoutManager`), never cancelled, and uses `try!` on `Task.sleep`. Each `stopAllTrainsResetTrack` adds another loop.
-2. **Duplicate point address** – in `Cellar`, points 3 and 9 both use DCC address 56.
-3. **`RouteOperator.requestPathItem`** – after finding a blocking resource it stops the train but then falls through, marks the block occupied, sets speed and returns `.active` (probably missing a `return`).
-4. **`SensorLocation ==`** ignores associated values (`.start(A,…) == .start(B,…)` is true), and is inconsistent with the synthesised `Hashable`.
-5. **Non-macOS build** – `Led` calls `HardwareManager.setLED`, which doesn't exist; iOS/Linux builds will fail.
-6. `Layout.path()` – the "check a route exists in this direction" block is dead code (inner `if blocks.isEmpty` can't be true).
-7. `LayoutManager.processEvent` error path uses `try! CBUSManager.shared.stopAllTrains()` – crashes if CBUS is unreachable.
-8. `CBUSManager.powerTrain` delayed commands run in an untracked `Task`; a later stop can be overtaken by an earlier delayed speed command.
+- None currently known.
 
 **Incomplete / TODO**
 - `stopDelay` and timer stops hard-code `.forward` direction; speed-change delay should depend on block length.
@@ -163,12 +157,14 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 **Dead / legacy code**
 - `Resources/params.json`, `trainParams.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `Layout.trains` / `Layout.train(_:)`, `TestTrack2`, `TramSplit`, SunCalc dependency.
-- `.swiftpm/xcode/ModelRailwayHardware/` is an older standalone copy of the hardware package (with its own `.git`, `LayoutHardwareController`, `CBUSHardwareDriver`) that has since been merged into `Sources/`. The main repo's git has an alternates entry pointing into Xcode DerivedData, which makes `git status` fail outside Xcode.
+- `.swiftpm/xcode/ModelRailwayHardware/` held an older standalone copy of the hardware package, since merged into `Sources/ModelRailwayHardware/`. The folder is now empty, but the repo still tracks it as a submodule gitlink (mode 160000) with no `.gitmodules` entry, so `git submodule` commands fail. `git rm --cached .swiftpm/xcode/ModelRailwayHardware` removes the orphan entry.
 
 **Design observations**
 - Layout and train roster are compiled in (`Cellar`, `Trains`); moving them to JSON/MQTT config would allow changes without rebuilds.
 - No unit tests; the topology/path/signal logic is pure and would be easy to test with `TestTrack2`/`TramSplit`.
 - Signals are both polled (0.2 s) and force-refreshed on every `signalState()` read.
+- Stop timing uses `Task.sleep` inside `RouteOperator` (`checkForTrainStop`, `endRoute`; there is a TODO to replace this with a stop event). The actor stays reentrant during the sleep, so other events for the same train can be processed while it waits.
+- When a block is freed, its associated points are released one at a time with a 200 ms gap, so they don't all switch at once and risk a short.
 - `Trains.trains` is a computed property that builds new `Train` values each call (fine because equality is by id, but wasteful).
 
 ## 10. How to extend (quick guide)

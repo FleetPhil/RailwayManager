@@ -48,7 +48,7 @@ actor Led {
         Task { await Led.shared.apply(newState, forColour: colour) }
     }
 
-    private func apply(_ newState: LedState, forColour colour: LEDColour) {
+    private func apply(_ newState: LedState, forColour colour: LEDColour) async {
         flashTasks[colour]?.cancel()
         flashTasks[colour] = nil
 
@@ -56,16 +56,16 @@ actor Led {
             let durations = newState.durations
             flashTasks[colour] = Task {
                 while !Task.isCancelled {
-                    HardwareManager.setLED(colour, on: true)
+                    await CBUSManager.shared.setLED(colour, on: true)
                     try? await Task.sleep(for: .seconds(durations.on))
                     guard !Task.isCancelled else { break }
-                    HardwareManager.setLED(colour, on: false)
+                    await CBUSManager.shared.setLED(colour, on: false)
                     try? await Task.sleep(for: .seconds(durations.off))
                 }
-                HardwareManager.setLED(colour, on: false)
+                await CBUSManager.shared.setLED(colour, on: false)
             }
         } else {
-            HardwareManager.setLED(colour, on: newState == .on)
+            await CBUSManager.shared.setLED(colour, on: newState == .on)
         }
     }
 #endif
