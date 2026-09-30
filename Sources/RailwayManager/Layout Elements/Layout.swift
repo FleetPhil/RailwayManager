@@ -36,9 +36,8 @@ class Layout: @unchecked Sendable  {
     // The routes from the layout graph calculated at init
     var blockRoutes: [BlockRoute] = []
 
-    // The layout graphs in each direction
-    var forwardLayoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: [])
-    var reverseLayoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: [])
+    // The layout graph: vertices are (block, travel direction) pairs, see graphVertex()
+    var layoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: [])
 
     init() {  }
 
@@ -47,8 +46,7 @@ class Layout: @unchecked Sendable  {
     // caches that are unsafe to initialise lazily on a Sendable class.
     func buildLayout() {
         blockRoutes = makeBlockRoutes()
-        forwardLayoutGraph = makeLayoutGraph(.forward)
-        reverseLayoutGraph = makeLayoutGraph(.reverse)
+        layoutGraph = makeLayoutGraph()
     }
     
     // Helper functions

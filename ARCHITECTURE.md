@@ -89,9 +89,9 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 ### Derived at `buildLayout()`
 - `blockRoutes` – every legal block→block transition per direction with the point settings required, found by `makeBlockRoutes()` walking point chains (facing → both legs, trailing → single). Each route also records `toDirection`, the travel direction on entering `toBlock`, derived by `entryDirection(into:through:)` from which of `toBlock`'s own exits the connection arrives through (arriving via its forward exit = travelling reverse). It differs from `direction` only across a loop closure; `BlockRoute.description` shows it (`-> dir`) only then.
-- `forwardLayoutGraph` / `reverseLayoutGraph` – SwiftGraph directed graphs of those transitions.
-- `Layout.path(from:to:direction:)` – BFS shortest path → `Path` of `PathItem`s (from, to, role, pointSettings).
-- `layoutIsValid()` – consistency checks (exits, point connections symmetric, every block→block link and point→block leg matched by exactly one exit on the receiving block, signals/sensors reference known items, no duplicate point settings). Failure is fatal at startup.
+- `layoutGraph` – SwiftGraph directed graph of those transitions. Vertices are (block, travel direction) pairs named by `graphVertex()` (`"A+"` forward, `"A-"` reverse); each block route is an edge from `fromBlock`/`direction` to `toBlock`/`toDirection`.
+- `Layout.path(from:to:direction:)` – BFS shortest path from the start block in the given direction to the target block in either direction → `Path` (starting direction) of `PathItem`s (from, to, fromDirection, toDirection, role, pointSettings). The directions differ only across a loop closure.
+- `layoutIsValid()` – logs "Layout <name> is valid" on success; consistency checks (exits, point connections symmetric, every block→block link and point→block leg matched by exactly one exit on the receiving block, signals/sensors reference known items, no duplicate point settings). Failure is fatal at startup.
 
 ### Routes
 - `Route` = id + `[Segment]`; `Segment` = `Path` + optional `WaitTime` (`fixed(s)`, `halt` 5 s, `station` 10 s, `terminus` 20 s). A direction change happens between segments.
@@ -197,10 +197,11 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 2. `DCCDirection` added for the hardware layer, with `dccDirection(_:)` as the single conversion point (commit `621acea`).
 3. Per-train facing (`trainFacing`, `facing(_:)`, `setTrainFacing`), defaulting to forward. Nothing changes facing yet.
 4a. Topology dump: console `dp` writes `Layout.topologyDump()` (sorted block routes, and the path or "no route" for every block pair in both directions) to `~/RailwayManager-topology-<Layout>-<timestamp>.txt`. A Cellar baseline taken before step 4 is diffed after each topology sub-step.
-4b. `BlockRoute.toDirection` (entry direction into the next block); `traversePointChain` also returns the point leg that connects to the block; `layoutIsValid()` requires links to be matched by the receiving block's exits. Not yet used by path finding.
+4b. `BlockRoute.toDirection` (entry direction into the next block); `traversePointChain` also returns the point leg that connects to the block; `layoutIsValid()` requires links to be matched by the receiving block's exits.
+4c. Single `layoutGraph` of block/direction vertices replaces the forward/reverse graphs; `path()` searches to the target block in either direction; `PathItem` has `fromDirection`/`toDirection`. Nothing reads the path item directions yet. `layoutIsValid()` logs success at info level.
 
 ### Remaining steps (each a separate, behaviour-preserving commit where possible)
-4. **Topology** (remaining: 4c single block/direction graph and `PathItem` directions, 4d `contiguousBlocks()` following flips): replace the forward/reverse graphs with one graph whose vertices are block/direction pairs (e.g. `"A+"`, `"A-"`); `PathItem` gets `fromDirection`/`toDirection` and `Path.direction` becomes the starting direction; `contiguousBlocks()` returns (block, direction) pairs following flips. **Check: every Cellar path is identical before and after.**
+4. **Topology** (remaining: 4d): `contiguousBlocks()` returns (block, direction) pairs following flips. **Check: every Cellar path is identical before and after.**
 5. **Runtime state**: `BlockRuntimeState` carries the travel direction (`.occupied(train, BlockDirection)` etc.) because a train part-way round a loop occupies blocks in different directions; `snapshot.travelDirection(in:)` reads it from the block; direction locks store (train, direction) and compare per block.
 6. **Signals**: `nextMonitoredBlock` uses the travel direction in the unmonitored block, not the signal's; the distant-signal lookup in `SignalCoordinator` uses the direction in the next block.
 7. **RouteOperator**: sensor start/end checks, `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).

@@ -13,31 +13,33 @@ import SwiftGraph
 
 // MARK: Graph and path functions
 extension Layout {
-    // Return the Path between a pair of blocks (nil if no route)
+    // Return the Path between a pair of blocks, starting in the given direction in fromBlock.
+    // toBlock may be reached in either direction (they differ only if the path crosses a loop closure).
     func path(fromBlock: Block, toBlock: Block, direction: BlockDirection) throws -> Path {
-        let layoutGraph = direction == .forward ? forwardLayoutGraph : reverseLayoutGraph
-        let blocks = layoutGraph.edgesToVertices(edges: layoutGraph.bfs(from: fromBlock.id, to: toBlock.id))
+        let edges = layoutGraph.bfs(from: graphVertex(fromBlock, direction), goalTest: { graphBlockID($0) == toBlock.id })
+        let vertices = layoutGraph.edgesToVertices(edges: edges)
         
         // Check for no route
-        if blocks.isEmpty { throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)") }
+        if vertices.isEmpty { throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)") }
         
-        // If not empty the array must contain at least 2 blocks (from & to).
+        // If not empty the array must contain at least 2 vertices (from & to).
         // Each transition is checked against blockRoutes by pathItemForTransition(), which throws if missing
         
         var pathItems: [PathItem] = []
         var index: Int = 0
         
-        while blocks.count > index + 1 {
+        while vertices.count > index + 1 {
             var role: PathItemRole {
-                if blocks.count == 2 { return .only }       // Start and end only
+                if vertices.count == 2 { return .only }       // Start and end only
                 if index == 0 { return .first }
-                if index + 2 == blocks.count { return .last }
+                if index + 2 == vertices.count { return .last }
                 return .intermediate
             }
             
-            pathItems.append(try pathItemForTransition(fromBlock: block(blocks[index]),
-                                                       toBlock: block(blocks[index+1]),
-                                                       direction: direction,
+            pathItems.append(try pathItemForTransition(fromBlock: block(graphBlockID(vertices[index])),
+                                                       fromDirection: graphDirection(vertices[index]),
+                                                       toBlock: block(graphBlockID(vertices[index+1])),
+                                                       toDirection: graphDirection(vertices[index+1]),
                                                        role: role))
             index += 1
         }
@@ -46,19 +48,37 @@ extension Layout {
         return Path(direction: direction, pathItems: pathItems)
     }
     
-    private func pathItemForTransition(fromBlock: Block, toBlock: Block, direction: BlockDirection, role: PathItemRole) throws -> PathItem {
+    private func pathItemForTransition(fromBlock: Block, fromDirection: BlockDirection,
+                                       toBlock: Block, toDirection: BlockDirection,
+                                       role: PathItemRole) throws -> PathItem {
         if let blockRoute = blockRoutes.first(where: {
             $0.fromBlock == fromBlock &&
             $0.toBlock == toBlock &&
-            $0.direction == direction
+            $0.direction == fromDirection &&
+            $0.toDirection == toDirection
         }) {
             return PathItem(fromBlock: fromBlock,
                             toBlock: toBlock,
+                            fromDirection: fromDirection,
+                            toDirection: toDirection,
                             role: role,
                             pointSettings: blockRoute.pointSettings)
         } else {
-            throw TrainError.invalidPath("No block route from \(fromBlock) to \(toBlock), \(direction)")
+            throw TrainError.invalidPath("No block route from \(fromBlock) to \(toBlock), \(fromDirection) -> \(toDirection)")
         }
+    }
+    
+    // Layout graph vertex for a block and travel direction, e.g. "A+" (forward) or "A-" (reverse)
+    func graphVertex(_ block: Block, _ direction: BlockDirection) -> String {
+        block.id + (direction == .forward ? "+" : "-")
+    }
+    
+    private func graphBlockID(_ vertex: String) -> String {
+        String(vertex.dropLast())
+    }
+    
+    private func graphDirection(_ vertex: String) -> BlockDirection {
+        vertex.last == "+" ? .forward : .reverse
     }
     
     // Travel direction on entering `block` through `exit`, the connection as it appears in the block's own exits.
@@ -71,13 +91,16 @@ extension Layout {
     }
     
     // The layout graph builder.
-    // Vertices are blocks, Edges are direct connections, single points or groups of points
+    // Vertices are (block, travel direction) pairs, Edges are block routes: direct connections,
+    // single points or groups of points. An edge changes direction only across a loop closure.
     
-    func makeLayoutGraph(_ direction: BlockDirection) -> UnweightedGraph<String> {
-        let layoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: blocks.map({ $0.id }))
+    func makeLayoutGraph() -> UnweightedGraph<String> {
+        let vertices = blocks.flatMap({ block in BlockDirection.allCases.map({ graphVertex(block, $0) }) })
+        let layoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: vertices)
   
-        blockRoutes.filter({ $0.direction == direction }).forEach({ route in
-            layoutGraph.addEdge(from: route.fromBlock.id, to: route.toBlock.id, directed: true)
+        blockRoutes.forEach({ route in
+            layoutGraph.addEdge(from: graphVertex(route.fromBlock, route.direction),
+                                to: graphVertex(route.toBlock, route.toDirection), directed: true)
         })
         return layoutGraph
     }
@@ -358,6 +381,7 @@ extension Layout {
             }
         }
         
+        log.info("Layout \(type(of: self)) is valid")
         return true
     }
 }
