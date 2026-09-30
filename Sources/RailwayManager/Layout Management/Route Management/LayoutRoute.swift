@@ -382,6 +382,20 @@ extension Layout {
             }
         }
         
+        // Warn (not an error) for block exits that lead on but have no signal: trains run at normal speed there
+        for block in blocks {
+            for direction in BlockDirection.allCases {
+                switch block.blockExit[direction] {
+                case .block?, .point?:
+                    if endSignalForBlock(block, direction: direction) == nil {
+                        log.warning("Block \(block.id) has no signal at its \(direction) exit")
+                    }
+                default:
+                    break
+                }
+            }
+        }
+        
         log.info("Layout \(type(of: self)) is valid")
         return true
     }

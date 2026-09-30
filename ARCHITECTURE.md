@@ -91,7 +91,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - `blockRoutes` – every legal block→block transition per direction with the point settings required, found by `makeBlockRoutes()` walking point chains (facing → both legs, trailing → single). Each route also records `toDirection`, the travel direction on entering `toBlock`, derived by `Block.entryDirection(through:)` from which of `toBlock`'s own exits the connection arrives through (arriving via its forward exit = travelling reverse). It differs from `direction` only across a loop closure; `BlockRoute.description` shows it (`-> dir`) only then.
 - `layoutGraph` – SwiftGraph directed graph of those transitions. Vertices are (block, travel direction) pairs named by `graphVertex()` (`"A+"` forward, `"A-"` reverse); each block route is an edge from `fromBlock`/`direction` to `toBlock`/`toDirection`.
 - `Layout.path(from:to:direction:)` – BFS shortest path from the start block in the given direction to the target block in either direction → `Path` (starting direction) of `PathItem`s (from, to, fromDirection, toDirection, role, pointSettings). The directions differ only across a loop closure.
-- `layoutIsValid()` – logs "Layout <name> is valid" on success; consistency checks (exits, point connections symmetric, every block→block link and point→block leg matched by exactly one exit on the receiving block, each signal's indication equal to its block's exit in the signal's direction, signals/sensors reference known items, no duplicate point settings). Failure is fatal at startup.
+- `layoutIsValid()` – logs "Layout <name> is valid" on success; consistency checks (exits, point connections symmetric, every block→block link and point→block leg matched by exactly one exit on the receiving block, each signal's indication equal to its block's exit in the signal's direction, plus a non-fatal warning for any block exit that leads on without a signal, signals/sensors reference known items, no duplicate point settings). Failure is fatal at startup.
 
 ### Routes
 - `Route` = id + `[Segment]`; `Segment` = `Path` + optional `WaitTime` (`fixed(s)`, `halt` 5 s, `station` 10 s, `terminus` 20 s). A direction change happens between segments.
@@ -120,7 +120,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
    - front at end of `fromBlock` while still waiting → stop (`stoppedForResource`/`stoppedAtSensor`) or mark vacating;
    - rear at start of `toBlock` → previous block vacant, direction lock released, advance **rear** index.
 5. `didFreeResource` → every operator waiting on that resource retries (`requestPathItem`).
-6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (exit and end signal for the train's travel direction in that block) (stop→slow, diverging→normal, distant stop→normal, else fast). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `requestPathItem` stops the train and returns without touching speed or route state.
+6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (exit and end signal for the train's travel direction in that block) (stop→slow, diverging→normal, distant stop→normal, else fast; no signal at the exit→normal). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `requestPathItem` stops the train and returns without touching speed or route state.
 7. Stops: last path item of a segment with a `waitTime` stops at the block's station sensor (delay = half train length / speed) or its end sensor. Last segment → `.ending` → `endRoute`: stop, idle, free all other blocks held by the train, wait, light off, release session, `.ended`, publish `didEndRoute`.
 8. When no operators are active, `LayoutManager` schedules a **dormant** shutdown after 10 s (cancelled if a route starts): stop trains, signals off.
 
@@ -212,7 +212,7 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).
 
 ### Remaining steps
-None: all steps are done, pending a run of the TestLoop route. Open items are under *Loop-specific considerations*.
+None: all steps are done and the TestLoop route runs correctly with the console sensor sequence (along with the Cellar route). Open items are under *Loop-specific considerations*.
 
 ### Loop-specific considerations
 - Initial facing must be known; currently defaults to forward. May later come from config, a route request, or be persisted.

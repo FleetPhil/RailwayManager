@@ -172,6 +172,9 @@ actor RouteOperator {
                         newSpeed = .fast
                         delay = 0
                     }
+                } else {
+                    // No signal at the block exit: run at normal speed (on sight)
+                    newSpeed = .normal
                 }
             }
         }
