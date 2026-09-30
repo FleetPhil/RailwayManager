@@ -126,6 +126,17 @@ actor RouteOperator {
     
     // MARK: - Train commands
     
+    // The train's travel direction in a block, which differs from the train's direction part-way
+    // round a reversing loop. The block should be held by this train (its block state records the
+    // direction); if not, fall back to the train's direction.
+    private func travelDirection(in block: Block) async throws -> BlockDirection {
+        if let blockState = await stateService.blockState(block),
+           blockState.train == train, let direction = blockState.direction {
+            return direction
+        }
+        return try await trainController.trainDirection(train)
+    }
+    
     // Calculate the correct speed for the train in specified block based on the current track conditions
     private func setTrainSpeed(inBlock: Block) async throws {
         var newSpeed: TrainSpeed = lastCommandedTrainSpeed
@@ -140,12 +151,12 @@ actor RouteOperator {
             newSpeed = .slow
         default:
             // If no block exit speed is slow
-            let trainDirection = try await trainController.trainDirection(train)
-            if [.noExit, .none].contains(inBlock.blockExit[trainDirection]) {
+            let blockDirection = try await travelDirection(in: inBlock)
+            if [.noExit, .none].contains(inBlock.blockExit[blockDirection]) {
                 newSpeed = .slow
             } else {
                 // Set speed according to signal state
-                if let endSignal = layout.endSignalForBlock(inBlock, direction: trainDirection) {
+                if let endSignal = layout.endSignalForBlock(inBlock, direction: blockDirection) {
                     let blockEndSignalState = try await stateService.signalState(endSignal)
                     switch blockEndSignalState {
                     case (.stop, _):
@@ -252,16 +263,8 @@ actor RouteOperator {
         let trainSensor =
             try await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
 
-        // Start/end of block depends on the train's travel direction in the sensor's block,
-        // which differs from the train's direction part-way round a reversing loop.
-        // The block should be held by this train; if not, fall back to the train's direction.
-        let sensorBlockDirection: BlockDirection
-        if let blockState = await stateService.blockState(sensor.block),
-           blockState.train == train, let direction = blockState.direction {
-            sensorBlockDirection = direction
-        } else {
-            sensorBlockDirection = try await trainController.trainDirection(train)
-        }
+        // Start/end of block depends on the train's travel direction in the sensor's block
+        let sensorBlockDirection = try await travelDirection(in: sensor.block)
         let isStartOfBlock = sensor.location.isStart(sensorBlockDirection)
         let isEndOfBlock = sensor.location.isEnd(sensorBlockDirection)
         
@@ -442,9 +445,10 @@ actor RouteOperator {
                 if let stationSensor = layout.stationSensorForBlock(currentPathItem(.front).toBlock) {
                     return stationSensor
                 } else {
-                    let trainDirection = try trainController.trainDirection(train)
-                    guard let endSensor = layout.sensorForBlock(currentPathItem(.front).toBlock, atBlockStart: false, inDirection: trainDirection) else {
-                        throw TrainError.applicationError("No end sensor for block \(currentPathItem(.front).toBlock), \(trainDirection)")
+                    // The train stops at the end of toBlock in the direction it enters it
+                    let toDirection = currentPathItem(.front).toDirection
+                    guard let endSensor = layout.sensorForBlock(currentPathItem(.front).toBlock, atBlockStart: false, inDirection: toDirection) else {
+                        throw TrainError.applicationError("No end sensor for block \(currentPathItem(.front).toBlock), \(toDirection)")
                     }
                     return endSensor
                 }

@@ -120,7 +120,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
    - front at end of `fromBlock` while still waiting → stop (`stoppedForResource`/`stoppedAtSensor`) or mark vacating;
    - rear at start of `toBlock` → previous block vacant, direction lock released, advance **rear** index.
 5. `didFreeResource` → every operator waiting on that resource retries (`requestPathItem`).
-6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (stop→slow, diverging→normal, distant stop→normal, else fast). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `requestPathItem` stops the train and returns without touching speed or route state.
+6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (exit and end signal for the train's travel direction in that block) (stop→slow, diverging→normal, distant stop→normal, else fast). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `requestPathItem` stops the train and returns without touching speed or route state.
 7. Stops: last path item of a segment with a `waitTime` stops at the block's station sensor (delay = half train length / speed) or its end sensor. Last segment → `.ending` → `endRoute`: stop, idle, free all other blocks held by the train, wait, light off, release session, `.ended`, publish `didEndRoute`.
 8. When no operators are active, `LayoutManager` schedules a **dormant** shutdown after 10 s (cancelled if a route starts): stop trains, signals off.
 
@@ -204,11 +204,12 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 5b. `BlockRuntimeState` carries the train's travel direction in each block, and `snapshot.travelDirection(in:)` reads it from there instead of the train's single direction (the snapshot no longer holds train directions). When a new segment reverses the train, `RouteOperator.processNextFrontPathItem` calls `reverseTravelDirection(of:)` to flip the direction in every block the train holds, matching the old behaviour where all its blocks followed the train's direction.
 6. Signals: `Signal.nextBlock` returns (block, direction) and the next-block direction checks in `signalIndication`, the distant-signal lookup and the diverging-route walk through unmonitored blocks use it instead of the signal's direction. `entryDirection` moved from `Layout` to `Block` so signal code can use it. `layoutIsValid()` checks each signal's indication matches its block exit (all Cellar signals do).
 7a. `RouteOperator.handleSensorSet` works out start/end of block from the travel direction in the sensor's block (its block state) instead of the train's direction.
+7b. `RouteOperator.travelDirection(in:)` (block state direction, falling back to the train's direction) is used by `handleSensorSet` and by `setTrainSpeed` for the block-exit check and end-signal lookup; the stop sensor (end sensor when there is no station sensor) is chosen with the path item's `toDirection`.
 
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).
 
 ### Remaining steps (each a separate, behaviour-preserving commit where possible)
-7. **RouteOperator** (remaining: 7b speed and stopping, 7c facing): `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).
+7. **RouteOperator** (remaining: 7c facing): update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).
 8. **Test layout**: add a small `TestLoop` layout with a reversing loop and run a turn-round route using the console sensor commands (`sn<addr>` / `ss<addr>`).
 
 ### Loop-specific considerations
