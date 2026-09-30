@@ -274,6 +274,7 @@ extension MQTTManager {
         var command: RouteCommand
         var routeID: Int
         var trainID: Int
+        var initialDCCDirection: DCCDirection?     // Keep the train's current facing if nil
         var segments: [SegmentParams]
     }
     

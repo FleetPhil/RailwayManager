@@ -90,6 +90,12 @@ actor LayoutTrainController {
         trainFacing[train] = facing
     }
     
+    // Set the facing so that the loco travels in `direction` when commanded `dccDirection`.
+    // This is the only conversion from a DCCDirection to a facing (the inverse of dccDirection(_:)).
+    func setTrainFacing(_ train: Train, dccDirection: DCCDirection, travelling direction: BlockDirection) {
+        setTrainFacing(train, facing: dccDirection == .forward ? direction : direction.oppositeDirection)
+    }
+    
     // The front of the train has crossed a connection where block orientation flips (a loop closure).
     // The train keeps moving the same way, so its travel direction and facing both flip together,
     // leaving the DCC direction unchanged.

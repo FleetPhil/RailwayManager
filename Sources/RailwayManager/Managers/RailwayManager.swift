@@ -237,7 +237,8 @@ struct RailwayManager: ParsableCommand {
             segments.append(Segment(path: path, waitTime: segmentParams.waitTime))
         }
         
-        try await layoutManager.runRoute(route: Route(id: routeParams.routeID, segments: segments), train: train)
+        let route = Route(id: routeParams.routeID, segments: segments, initialDCCDirection: routeParams.initialDCCDirection)
+        try await layoutManager.runRoute(route: route, train: train)
     }
     
     static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {

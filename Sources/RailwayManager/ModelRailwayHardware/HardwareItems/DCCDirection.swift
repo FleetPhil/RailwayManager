@@ -8,7 +8,7 @@
 
 import Foundation
 
-public enum DCCDirection: String, Sendable, CaseIterable, CustomStringConvertible {
+public enum DCCDirection: String, Codable, Sendable, CaseIterable, CustomStringConvertible {
     case forward
     case reverse
     

@@ -10,12 +10,16 @@ import Foundation
 struct Route: CustomStringConvertible, Sendable {
     let id: Int
     let segments: [Segment]
+    // The DCC direction the loco sets off in, which fixes which way it faces at the start.
+    // Nil keeps the train's current facing (forward if it has not run before).
+    let initialDCCDirection: DCCDirection?
 
-    internal init(id: Int, segments: [Segment]) {
+    internal init(id: Int, segments: [Segment], initialDCCDirection: DCCDirection? = nil) {
         self.id = id
         self.segments = segments
+        self.initialDCCDirection = initialDCCDirection
         
-        log.info("Route \(id) created with \(segments.count) segments")
+        log.info("Route \(id) created with \(segments.count) segments\(initialDCCDirection.map({ ", starting \($0)" }) ?? "")")
     }
         
     var startBlock: Block  {

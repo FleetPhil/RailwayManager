@@ -15,7 +15,7 @@ Swift 6 command-line controller for Phil's model railway ("Cellar" layout): CBUS
 ## Terminology
 - `BlockDirection` – travel direction relative to a block's own orientation.
 - `DCCDirection` – direction commanded to a loco decoder.
-- Facing – per train, the block direction the loco travels in when DCC forward. `LayoutTrainController.dccDirection(_:)` is the only conversion between them.
+- Facing – per train, the block direction the loco travels in when DCC forward. `LayoutTrainController.dccDirection(_:)` is the only conversion between them (`setTrainFacing(_:dccDirection:travelling:)` is the inverse, for a route's `initialDCCDirection`).
 
 ## Testing without hardware
 Run with `-noCBUS` (and `-noMQTT` to use the layout's hard-coded route from `setupRoutes` in `Cellar Routes.swift`). `-layout TestLoop` selects the reversing-loop test layout (default `Cellar`). On macOS the console accepts `sn<addr>` / `ss<addr>` to simulate a north/south sensor pulse, `st` for status, `dp` to dump block routes and paths to a file in the home directory, `x` to shut down.

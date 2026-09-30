@@ -112,6 +112,9 @@ actor RouteOperator {
         
         // Update the block and train status
         try await trainController.setTrainDirection(train, direction: route.initialDirection)
+        if let initialDCCDirection = route.initialDCCDirection {
+            await trainController.setTrainFacing(train, dccDirection: initialDCCDirection, travelling: route.initialDirection)
+        }
         try await stateService.setStateForTrain(train, state: .idle)
         try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, route.initialDirection))
         
