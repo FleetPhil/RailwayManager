@@ -8,8 +8,10 @@
 import Foundation
 
 extension RailwayManager {
-    static func setupRoutes(layoutManager: LayoutManager) async throws -> Route  {
+    // The hard-coded route run with -noMQTT, or nil if the layout has none
+    static func setupRoutes(layoutManager: LayoutManager) async throws -> Route?  {
         let layout = layoutManager.layout
+        guard layout is Cellar else { return nil }
 
         let path11 = try layout.path(fromBlock: layout.block("B"),
                                     toBlock: layout.block("H"),

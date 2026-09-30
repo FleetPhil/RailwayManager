@@ -29,7 +29,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 | `Layout Management/Signals/` | `SignalTrackState` (per-signal aspect logic), `SignalCoordinator` (whole-layout refresh, distant & diverging aspects) |
 | `Layout Management/Train control/` | `LayoutTrainController` (actor – train state/direction, DCC commands), `DCCSessionStore`, `TrainRuntimeState` |
 | `Train/`, `Params/` | `Train`, `TrainSpeed`, `TrainSensor`; `TrainParams`, `TrainSpeedSetting`, `TrainStartFunction` |
-| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster); `Cellar Routes` (hard-coded test route) |
+| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestLoop` (reversing-loop test layout, dummy addresses), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster); `Cellar Routes` (hard-coded test route) |
 | `MQTTManager/` | `MQTTManager` actor – telemetry publish, topology, route-request subscription, `RouteParams` |
 | `ModelRailwayHardware/` | Hardware abstraction: `HardwarePoint`/`DCCHardwarePoint`/`CBUSHardwarePoint`, `HardwareSignal`/`CBUSHardwareSignal`, `HardwareTrain`/`CBUSHardwareTrain`, `DCCDirection`, `Led`, `Light`, `EventBus<T>`, `CBUSManager` (+ serial discovery, message encode/decode, op codes) |
 | `Diagnostics/` | `printStatus()` dump of a snapshot |
@@ -40,10 +40,10 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 ## 3. Runtime architecture
 
 ```
-            CLI flags (-noMQTT -noCBUS -noDCC --mqtt-host --mqtt-port --log-level)
+            CLI flags (-noMQTT -noCBUS -noDCC -layout --mqtt-host --mqtt-port --log-level)
                                    │
                           RailwayManager.run()
-                                   │  builds Cellar(), validates, connects MQTT, opens CBUS
+                                   │  builds the -layout layout (default Cellar), validates, connects MQTT, opens CBUS
                                    ▼
 MQTT /railway/route ──► monitorRouteRequests ──► LayoutManager.runRoute(route, train)
 console (sn/ss/x/st/dp) ──► LayoutEventHub                    │
@@ -95,7 +95,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 ### Routes
 - `Route` = id + `[Segment]`; `Segment` = `Path` + optional `WaitTime` (`fixed(s)`, `halt` 5 s, `station` 10 s, `terminus` 20 s). A direction change happens between segments.
-- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, segments `{fromBlock,toBlock,direction,waitTime}`) or, with `-noMQTT`, the hard-coded B→A route in `Cellar Routes.swift` with the first train.
+- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, segments `{fromBlock,toBlock,direction,waitTime}`) or, with `-noMQTT`, the layout's hard-coded route from `setupRoutes` (`Cellar Routes.swift`; for Cellar B→H forward then H→B reverse; none for other layouts yet) with the first train.
 - MQTT commands: `1` runRoute, `2` stopAllTrains (reset track), `3` endManager.
 
 ### Runtime state (`LayoutTrackStateService`)
@@ -170,7 +170,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - `Trains.trains` is a computed property that builds new `Train` values each call (fine because equality is by id, but wasteful).
 
 ## 10. How to extend (quick guide)
-- **New layout**: subclass `Layout`, fill `blocks`, `points` (+ `setConnection`), block exits (`setExit`), `signals`, `sensors`, then call `buildLayout()`; switch `Cellar()` in `RailwayManager.runLayout`. Run to check `layoutIsValid()`.
+- **New layout**: subclass `Layout`, fill `blocks`, `points` (+ `setConnection`), block exits (`setExit`), `signals`, `sensors`, then call `buildLayout()`; add a case to `LayoutName` in `RailwayManager.swift` and select it with `-layout <name>`. Run to check `layoutIsValid()`.
 - **New train**: add `TrainParams` in `Trains.swift` (DCC address, length in cm, power/speed per `TrainSpeed`, start functions).
 - **New event**: add a case to `LayoutEvent` (+ `description`, `isRouteEvent`), publish via `LayoutEventHub.shared.publish`, handle in `LayoutManager.processEvent`.
 - **New CBUS message**: add op code in `CBUSOpCodes.swift`, encoding in `CBUSManager.sendCBUSMessage`, decoding in `processReceivedMessage`.
@@ -206,11 +206,12 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 7a. `RouteOperator.handleSensorSet` works out start/end of block from the travel direction in the sensor's block (its block state) instead of the train's direction.
 7b. `RouteOperator.travelDirection(in:)` (block state direction, falling back to the train's direction) is used by `handleSensorSet` and by `setTrainSpeed` for the block-exit check and end-signal lookup; the stop sensor (end sensor when there is no station sensor) is chosen with the path item's `toDirection`.
 7c. Facing: `LayoutTrainController.crossOrientationChange` flips the train's direction and facing together when the front enters a block across a loop closure. `processNextFrontPathItem` detects a reversal by comparing the next path item's `fromDirection` with the train's direction (rather than the segment's starting direction), so a loop closure part-way through a segment is not mistaken for a reversal. No effect on Cellar (no loop closures).
+8a. `TestLoop` layout (S stub, A approach, point 1, loop B→C returning via the branch into A) and the `-layout` option (`LayoutName`, default Cellar). `setupRoutes` returns nil for layouts without a built-in route.
 
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).
 
 ### Remaining steps (each a separate, behaviour-preserving commit where possible)
-8. **Test layout**: add a small `TestLoop` layout with a reversing loop and run a turn-round route using the console sensor commands (`sn<addr>` / `ss<addr>`).
+8. **Test layout** (remaining: 8b): built-in `TestLoop` route S→C forward then C→S round the loop, run using the console sensor commands (`sn<addr>` / `ss<addr>`).
 
 ### Loop-specific considerations
 - Initial facing must be known; currently defaults to forward. May later come from config, a route request, or be persisted.

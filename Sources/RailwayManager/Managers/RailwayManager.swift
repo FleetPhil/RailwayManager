@@ -30,6 +30,19 @@ enum LogLevel: String, CaseIterable, ExpressibleByArgument {
     }
 }
 
+// Track layouts selectable from the command line
+enum LayoutName: String, CaseIterable, ExpressibleByArgument {
+    case cellar = "Cellar"
+    case testLoop = "TestLoop"
+    
+    func makeLayout() -> Layout {
+        switch self {
+        case .cellar:       Cellar()
+        case .testLoop:     TestLoop()
+        }
+    }
+}
+
 @main
 struct RailwayManager: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -57,6 +70,10 @@ struct RailwayManager: ParsableCommand {
     @Option(help: "Minimum log level")
     var logLevel: LogLevel = .verbose
     
+    @Option(name: .customLong("layout", withSingleDash: true),
+            help: "Track layout to run (\(LayoutName.allCases.map(\.rawValue).joined(separator: ", ")))")
+    var layoutName: LayoutName = .cellar
+    
     func run() throws {
         // Apply the options before anything reads them
         GlobalOptions.noMQTT = noMQTT
@@ -77,7 +94,7 @@ struct RailwayManager: ParsableCommand {
         var layoutManager: LayoutManager {
             get async {
                 do {
-                    let layout = Cellar()
+                    let layout = layoutName.makeLayout()
                     
                     // Start MQTT
                     try await MQTTManager.shared.connect()
@@ -120,10 +137,13 @@ struct RailwayManager: ParsableCommand {
         
         do {
             if GlobalOptions.noMQTT {
-                // No route source without MQTT: run the hardcoded test route
-                let route = try await setupRoutes(layoutManager: layoutManager)
-                let sbb = Trains.trains.first!
-                try await layoutManager.runRoute(route: route, train: sbb)
+                // No route source without MQTT: run the hardcoded test route for the layout, if any
+                if let route = try await setupRoutes(layoutManager: layoutManager) {
+                    let sbb = Trains.trains.first!
+                    try await layoutManager.runRoute(route: route, train: sbb)
+                } else {
+                    log.info("No built-in route for layout \(type(of: layoutManager.layout))")
+                }
             } else {
                 // Run routes as they are requested over MQTT
                 monitorRouteRequests(layoutManager: layoutManager)
