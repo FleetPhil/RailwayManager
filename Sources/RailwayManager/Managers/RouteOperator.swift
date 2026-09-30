@@ -428,6 +428,12 @@ actor RouteOperator {
         try await stateService.setStateForBlock(currentPathItem(.front).fromBlock, newState: .vacating(train, currentPathItem(.front).fromDirection))
         try await stateService.setStateForBlock(currentPathItem(.front).toBlock, newState: .occupied(train, currentPathItem(.front).toDirection))
         
+        // Crossing a loop closure flips the block orientation: the train's travel direction and facing
+        // both change, so the DCC direction (and front/rear sensor detection) stays the same
+        if currentPathItem(.front).fromDirection != currentPathItem(.front).toDirection {
+            try await trainController.crossOrientationChange(train)
+        }
+        
         // Check if we are stopping in this block, if not just carry on
         // We are stopping if this is the last pathItem in the segment and a wait time has been defined
         guard currentPathItem(.front).role.isLast, let waitTime = currentWaitTime else {
@@ -472,9 +478,11 @@ actor RouteOperator {
         if let nextIndex = nextPathItemIndex(.front) {
             currentItemIndex[.front] = nextIndex
             
-            // Check for change in direction: a new segment in the opposite direction reverses the train,
-            // which reverses its travel direction in every block it holds
-            let newDirection = currentSegment(.front).path.direction
+            // Check for change in direction: a new segment starting in the opposite direction to the
+            // train's travel direction in its current block reverses the train, which reverses its
+            // travel direction in every block it holds. Within a segment the next item always starts
+            // in the train's direction (a loop closure is handled when the front crosses it).
+            let newDirection = currentPathItem(.front).fromDirection
             if try await trainController.trainDirection(train) != newDirection {
                 try await trainController.setTrainDirection(train, direction: newDirection)
                 await stateService.reverseTravelDirection(of: train)

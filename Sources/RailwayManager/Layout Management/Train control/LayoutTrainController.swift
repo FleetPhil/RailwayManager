@@ -3,6 +3,7 @@ import Foundation
 actor LayoutTrainController {
     private let dccSessionStore = DCCSessionStore()
     private(set) var trainStates: [ Train: TrainRuntimeState] = [:]
+    // Each train's travel direction in the block the front of the train is in
     private(set) var trainDirections: [Train: BlockDirection] = [:]
     
     // Which way each loco points: the block direction it travels in when commanded DCC forward.
@@ -87,6 +88,16 @@ actor LayoutTrainController {
         guard facing != self.facing(train) else { return }
         log.verbose("Train \(train) now faces \(facing)")
         trainFacing[train] = facing
+    }
+    
+    // The front of the train has crossed a connection where block orientation flips (a loop closure).
+    // The train keeps moving the same way, so its travel direction and facing both flip together,
+    // leaving the DCC direction unchanged.
+    func crossOrientationChange(_ train: Train) throws {
+        let direction = try trainDirection(train)
+        trainDirections[train] = direction.oppositeDirection
+        trainFacing[train] = facing(train).oppositeDirection
+        log.verbose("Train \(train) crossed an orientation change: direction \(direction.oppositeDirection), faces \(facing(train))")
     }
     
     // The DCC direction to command so the train travels in its current block direction.
