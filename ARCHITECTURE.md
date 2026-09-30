@@ -29,7 +29,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 | `Layout Management/Signals/` | `SignalTrackState` (per-signal aspect logic), `SignalCoordinator` (whole-layout refresh, distant & diverging aspects) |
 | `Layout Management/Train control/` | `LayoutTrainController` (actor – train state/direction, DCC commands), `DCCSessionStore`, `TrainRuntimeState` |
 | `Train/`, `Params/` | `Train`, `TrainSpeed`, `TrainSensor`; `TrainParams`, `TrainSpeedSetting`, `TrainStartFunction` |
-| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestLoop` (reversing-loop test layout, dummy addresses), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster); `Cellar Routes` (hard-coded test route) |
+| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestLoop` (reversing-loop test layout, dummy addresses), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster); `Cellar Routes` (`setupRoutes`: hard-coded test route per layout), `TestLoop Routes` |
 | `MQTTManager/` | `MQTTManager` actor – telemetry publish, topology, route-request subscription, `RouteParams` |
 | `ModelRailwayHardware/` | Hardware abstraction: `HardwarePoint`/`DCCHardwarePoint`/`CBUSHardwarePoint`, `HardwareSignal`/`CBUSHardwareSignal`, `HardwareTrain`/`CBUSHardwareTrain`, `DCCDirection`, `Led`, `Light`, `EventBus<T>`, `CBUSManager` (+ serial discovery, message encode/decode, op codes) |
 | `Diagnostics/` | `printStatus()` dump of a snapshot |
@@ -95,7 +95,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 ### Routes
 - `Route` = id + `[Segment]`; `Segment` = `Path` + optional `WaitTime` (`fixed(s)`, `halt` 5 s, `station` 10 s, `terminus` 20 s). A direction change happens between segments.
-- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, segments `{fromBlock,toBlock,direction,waitTime}`) or, with `-noMQTT`, the layout's hard-coded route from `setupRoutes` (`Cellar Routes.swift`; for Cellar B→H forward then H→B reverse; none for other layouts yet) with the first train.
+- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, segments `{fromBlock,toBlock,direction,waitTime}`) or, with `-noMQTT`, the layout's hard-coded route from `setupRoutes` (`Cellar Routes.swift`; Cellar: B→H forward then H→B reverse; TestLoop: S→C forward then C→S reverse round the loop; none for other layouts) with the first train.
 - MQTT commands: `1` runRoute, `2` stopAllTrains (reset track), `3` endManager.
 
 ### Runtime state (`LayoutTrackStateService`)
@@ -176,7 +176,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - **New CBUS message**: add op code in `CBUSOpCodes.swift`, encoding in `CBUSManager.sendCBUSMessage`, decoding in `processReceivedMessage`.
 - **New MQTT command**: extend `RouteParams.RouteCommand` and the switch in `RailwayManager.monitorRouteRequests`.
 
-## 11. Reversing loop support (in progress)
+## 11. Reversing loop support
 
 ### Problem
 Route finding and train control originally assumed one layout-wide meaning of "direction": `Layout.path()` searched a forward graph or a reverse graph, and commanding a train DCC-forward was assumed to move it forward in every block. A reversing loop breaks this: a train running DCC-forward goes out of a block in one direction and comes back through it in the other, so no single layout-wide orientation exists.
@@ -207,11 +207,12 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 7b. `RouteOperator.travelDirection(in:)` (block state direction, falling back to the train's direction) is used by `handleSensorSet` and by `setTrainSpeed` for the block-exit check and end-signal lookup; the stop sensor (end sensor when there is no station sensor) is chosen with the path item's `toDirection`.
 7c. Facing: `LayoutTrainController.crossOrientationChange` flips the train's direction and facing together when the front enters a block across a loop closure. `processNextFrontPathItem` detects a reversal by comparing the next path item's `fromDirection` with the train's direction (rather than the segment's starting direction), so a loop closure part-way through a segment is not mistaken for a reversal. No effect on Cellar (no loop closures).
 8a. `TestLoop` layout (S stub, A approach, point 1, loop B→C returning via the branch into A) and the `-layout` option (`LayoutName`, default Cellar). `setupRoutes` returns nil for layouts without a built-in route.
+8b. Built-in `TestLoop` route (`TestLoop Routes.swift`): S→C forward (through the branch, so the train crosses the loop closure and enters C travelling reverse), halt, then C→S reverse via B and A. DCC stays forward throughout; the train ends in S facing the other way. Console sequence with a short train (front = `sn`, rear = `ss` while DCC forward): `sn2 sn3 ss3 sn4 sn8 ss8 sn7`, wait for the halt, then `sn6 ss6 sn5 sn4 ss4 sn3 sn2 ss2 sn1`.
 
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).
 
-### Remaining steps (each a separate, behaviour-preserving commit where possible)
-8. **Test layout** (remaining: 8b): built-in `TestLoop` route S→C forward then C→S round the loop, run using the console sensor commands (`sn<addr>` / `ss<addr>`).
+### Remaining steps
+None: all steps are done, pending a run of the TestLoop route. Open items are under *Loop-specific considerations*.
 
 ### Loop-specific considerations
 - Initial facing must be known; currently defaults to forward. May later come from config, a route request, or be persisted.

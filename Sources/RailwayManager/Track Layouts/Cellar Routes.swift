@@ -11,8 +11,15 @@ extension RailwayManager {
     // The hard-coded route run with -noMQTT, or nil if the layout has none
     static func setupRoutes(layoutManager: LayoutManager) async throws -> Route?  {
         let layout = layoutManager.layout
-        guard layout is Cellar else { return nil }
-
+        switch layout {
+        case is Cellar:     return try cellarRoute(layout: layout)
+        case is TestLoop:   return try testLoopRoute(layout: layout)
+        default:            return nil
+        }
+    }
+    
+    // B to H forward, then back to B in reverse
+    private static func cellarRoute(layout: Layout) throws -> Route {
         let path11 = try layout.path(fromBlock: layout.block("B"),
                                     toBlock: layout.block("H"),
                                     direction: .forward)
