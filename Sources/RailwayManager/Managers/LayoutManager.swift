@@ -52,15 +52,17 @@ actor LayoutManager: Sendable {
             let stream = await LayoutEventHub.shared.subscribe()
             for await event in stream {
                 log.verbose("Event: \(event)")
-                do {
-                    try await self.processEvent(event)
-                } catch {
-                    log.warning("Failed to process event \(event): \(error)")
-                    // Enter the error state via setState so trains are stopped and LEDs set
-                    // TODO: ignore spurious sensors
-//                    try? await self.setState(.error)
-                    
-                    try! await CBUSManager.shared.stopAllTrains()
+                // Each event is dispatched into its own Task so the loop keeps consuming
+                // new events without waiting for prior ones to complete. This is needed
+                // because some events (e.g. didStartRoute) wait for DCC session state that
+                // only arrives via a later event (didGetSession).
+                Task {
+                    do {
+                        try await self.processEvent(event)
+                    } catch {
+                        log.warning("Failed to process event \(event): \(error)")
+                        try! await CBUSManager.shared.stopAllTrains()
+                    }
                 }
             }
         })
@@ -253,10 +255,10 @@ actor LayoutManager: Sendable {
                 // Free any points associated with this block (and associated conflicting points)
                 for point in layout.points {
                     let associatedBlock = await trackStateService.associatedBlockForPoint(point)
-                    if let associatedBlock {
-                        if associatedBlock == block {
-                            await LayoutEventHub.shared.publish(.didFreeResource(.point(point)))
-                        }
+                    if let associatedBlock, associatedBlock == block {
+                        await LayoutEventHub.shared.publish(.didFreeResource(.point(point)))
+                        // Wait otherwise all points set at once causing potential short
+                        try await Task.sleep(for: .milliseconds(200))
                     }
                 }
                                 
@@ -309,6 +311,8 @@ actor LayoutManager: Sendable {
                 if !GlobalOptions.noCBUS {
                     await CBUSManager.shared.printSensorStats()
                 }
+                
+                try await Task.sleep(for: .seconds(1))      // Allow time to print stats
                 
                 exit(0)
                 

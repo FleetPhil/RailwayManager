@@ -9,9 +9,6 @@ actor LayoutTrainController {
     }
 
     func activateSession(_ session: Int, forAddress address: Int) async {
-        
-        
-        
         guard let train = await dccSessionStore.train(forAddress: address) else {
             log.debug("DCC: Can't activate session: no train for address \(address)")
             return

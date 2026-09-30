@@ -46,7 +46,9 @@ actor CBUSManager: Sendable {
     
     private(set) var minNSet: [ Int : Int] = [:]            // Min max set value for each sensor
     private(set) var maxSSet: [ Int : Int] = [:]            // Min max set value for each sensor
-    
+    private(set) var minNReadings: [ Int : Int ] = [:]      // Min N readings
+    private(set) var minSReadings: [ Int : Int ] = [:]      // Min S readings
+
     private init() { }
     
     func setup() throws {
@@ -399,22 +401,25 @@ extension CBUSManager {
             
         case .ASOF3:        // Sensor unset stats
             let deviceID = Int(message[3]) * 256 + Int(message[4])
+            let readings = Int(message[5])
             let max = Int(message[6]) * 10
             let min = Int(message[7]) * 10
             
             if max > 1200 {         // N set
+                if readings < minNReadings[deviceID, default: 1000] { minNReadings[deviceID] = readings }
                 if max < minNSet[deviceID, default: 2000] {         // Lowest max for this device
                     minNSet[deviceID] = max
                 }
             } else if min < 900 {                // S set
+                if readings < minSReadings[deviceID, default: 1000] { minSReadings[deviceID] = readings }
                 if min > maxSSet[deviceID, default: 0] {
                     maxSSet[deviceID] = min
                 }
             }
             
-            var s: String = "Sensor \(deviceID) unset: "
-            s.append(" \(Int(message[5])) readings, max: \(max), min: \(min)")
-            log.debug(s)
+//            var s: String = "Sensor \(deviceID) unset: "
+//            s.append(" \(Int(message[5])) readings, max: \(max), min: \(min)")
+//            log.debug(s)
             
             return .didUnsetSensor(deviceID, min < 1000 ? .south : .north)
             
@@ -431,11 +436,11 @@ extension CBUSManager {
     func printSensorStats() {
         log.debug("Sensor N Min set stats")
         minNSet.keys.sorted().forEach({ address in
-            log.debug("\(address): \(minNSet[address]!)")
+            log.debug("\(address): \(minNReadings[address]!), \(minNSet[address]!)")
         })
         log.debug("Sensor S Max set stats")
         maxSSet.keys.sorted().forEach({ address in
-            log.debug("\(address): \(maxSSet[address]!)")
+            log.debug("\(address): \(minSReadings[address]!), \(maxSSet[address]!)")
         })
     }
 }
