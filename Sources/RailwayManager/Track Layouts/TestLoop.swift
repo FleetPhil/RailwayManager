@@ -22,11 +22,12 @@ class TestLoop: Layout, @unchecked Sendable {
     override init() {
         super.init()
 
+        // Lengths in cm: the loop (B + C) holds a train up to 120 cm
         blocks = [
-            Block(id: "S"),
-            Block(id: "A"),
-            Block(id: "B"),
-            Block(id: "C"),
+            Block(id: "S", length: 80),
+            Block(id: "A", length: 80),
+            Block(id: "B", length: 60),
+            Block(id: "C", length: 60),
         ]
         points = [
             Point(id: 1, address: 1, orientation: .left),

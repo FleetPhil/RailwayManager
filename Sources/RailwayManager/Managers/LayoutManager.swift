@@ -131,6 +131,9 @@ actor LayoutManager: Sendable {
     }
 
     func runRoute(route: Route, train: Train) async throws {
+        // Reject a route that takes the train round a loop too short for it
+        try route.checkLoopLengths(for: train)
+        
         // Look for an existing inActive route operator for this train
         if let routeOperator = routeOperators[train] {
             if await !routeOperator.routeState.isInactive {

@@ -79,7 +79,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 ## 4. Domain model
 
 ### Topology (static)
-- **Block** – id string; `blockExit[.forward/.reverse]` = `.block(Block)`, `.point(PointSetting)`, `.noExit`, `.unknown`; `isUnMonitored` blocks are passed through for signalling.
+- **Block** – id string; optional `length` (cm, used for the loop-length check); `blockExit[.forward/.reverse]` = `.block(Block)`, `.point(PointSetting)`, `.noExit`, `.unknown`; `isUnMonitored` blocks are passed through for signalling.
 - **Point** – id, DCC address (`DCCHardwarePoint`, optional `reversedConnection`), `branchOrientation` (left/right, used for signal route indication), `connections[.single/.splitStraight/.splitBranch]` → block or another point (back-to-back points supported), optional `defaultPosition` (restored when freed).
 - **Signal** – location block, direction, `indication` (`.block` or `.point(point, leg)`), CBUS address (0 = dummy, not driven). Home + distant aspects: `off/stop/go/right/left`.
 - **Sensor** – id, CBUS address, `SensorLocation` `.start/.end(block, gap)` (relative to forward), `.single`, `.station`. Events carry north/south orientation which, with train direction and `Train.trainFrontSensorOrientation`, determines whether the **front or rear** of the train tripped it.
@@ -95,7 +95,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 ### Routes
 - `Route` = id + `[Segment]`; `Segment` = `Path` + optional `WaitTime` (`fixed(s)`, `halt` 5 s, `station` 10 s, `terminus` 20 s). A direction change happens between segments.
-- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, optional `initialDCCDirection` (`"forward"`/`"reverse"`; omitted keeps the train's current facing), segments `{fromBlock,toBlock,direction,waitTime}`) or, with `-noMQTT`, the layout's hard-coded route from `setupRoutes` (`Cellar Routes.swift`; Cellar: B→H forward then H→B reverse; TestLoop: S→C forward then C→S reverse round the loop; none for other layouts) with the first train.
+- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, optional `initialDCCDirection` (`"forward"`/`"reverse"`; omitted keeps the train's current facing), segments `{fromBlock,toBlock,direction,waitTime}`) or, with `-noMQTT`, the layout's hard-coded route from `setupRoutes` (`Cellar Routes.swift`; Cellar: B→H forward then H→B reverse; TestLoop: S→C forward then C→S reverse round the loop; none for other layouts) with the first train. `LayoutManager.runRoute` first calls `Route.checkLoopLengths(for:)` (see section 11, loop reservation).
 - MQTT commands: `1` runRoute, `2` stopAllTrains (reset track), `3` endManager.
 
 ### Runtime state (`LayoutTrackStateService`)
@@ -152,6 +152,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 **Incomplete / TODO**
 - Speed-change delay should depend on block length.
+- Loops are not reserved as a unit: a second train can take a loop's exit block while the first is in the loop, and neither can then move (section 11, loop reservation step 3).
 - `stoppingAtSensor` and `waiting` train states are handled but never set; `didEndTimer`, buttons 1 and 5 unused.
 - `processVacatedBlock` has an unfinished "Free any" comment.
 - Lights (`Light`, `Block.associatedLights`, `CBUSManager.setLight/setClocks/setLED`) are stubs.
@@ -217,4 +218,7 @@ None: all steps are done and the TestLoop route runs correctly with the console 
 ### Loop-specific considerations
 - Initial facing: a route can set it with `initialDCCDirection` (in `Route` and the MQTT route JSON). Without it the train keeps its facing from the previous route, or forward if it has not run. Not persisted across restarts.
 - Track polarity: none needed with an auto-reverser; if a relay is used, model it as a resource set with the path item, switched only while the train is wholly inside the loop.
-- The loop must be longer than the train; reservation should treat the loop as a unit so a train cannot enter it without being able to leave.
+- **Loop reservation.** Within a stretch of a route with no reversal (`Route.blockStretches`), a block the front enters twice marks a loop (or a full circuit). Two problems: (a) a train longer than the loop comes back to the block while its own rear is still there and stops waiting for itself; (b) another train can take the exit block (e.g. S→A on TestLoop) while the first is in the loop, so neither can move.
+  1. *Done:* `Block.length` (optional, cm) and `Route.checkLoopLengths(for:)`, called by `LayoutManager.runRoute`: the blocks between the two visits must total at least the train's length, otherwise the route is rejected (`invalidRoute`); if any length is unknown it logs a warning and skips the check. Fixes (a). TestLoop has lengths (loop B + C = 120 cm); Cellar has none (and no loops). The check uses whole block lengths, so sensor gaps near block ends leave slightly less room than it allows.
+  2. *Not needed:* letting a train re-reserve a point it already holds. A point is released when the block it was reserved from is freed, i.e. when the rear clears it, so while the train still holds the junction point its rear is on or over it and re-setting the point would be unsafe. With (1) the train fits, so by the time its front reaches the end of the loop block its rear has cleared the junction and the point is free; a long train may slow briefly in the last loop block.
+  3. *Future (not yet fixed):* reserve the loop as a unit. When a train is about to enter a loop, reserve every block from the entry to the block after the exit (C, B and A in the exit direction on TestLoop) atomically in the reservation critical section, and stop before the loop if any is unavailable; a block the rear vacates that the train needs again (A) stays reserved for it instead of becoming vacant. Needs multi-item reservation in `LayoutTrackStateService` and a change to `processVacatedBlock`. Fixes (b). Test with two trains on TestLoop over MQTT: the second should wait in S until the first has left the loop.

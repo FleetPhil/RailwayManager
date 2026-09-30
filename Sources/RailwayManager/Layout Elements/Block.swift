@@ -35,15 +35,20 @@ final class Block: @unchecked Sendable, CustomStringConvertible {
     // Lights associated with this block
     let associatedLights: [Light]
     
+    // Length in cm (nil if not known), used to check a train fits in a loop
+    let length: Int?
+    
     nonisolated var description: String {
         return self.id
     }
 
     internal init(id: String,
+                  length: Int? = nil,
                   associatedLights: [Light] = [],
                   isUnMonitored: Bool = false)
     {
         self.id = id
+        self.length = length
 
         self.isUnMonitored = isUnMonitored
         self.associatedLights = associatedLights
