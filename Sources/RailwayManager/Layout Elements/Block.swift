@@ -27,7 +27,7 @@ final class Block: @unchecked Sendable, CustomStringConvertible {
     let id: String                          // Block ID - single character
 
     // MARK: Fixed configuration — set during layout init, immutable at runtime
-    private(set) var blockExit: [ Direction : BlockExit] = [ .forward : .unknown, .reverse : .unknown ]
+    private(set) var blockExit: [ BlockDirection : BlockExit] = [ .forward : .unknown, .reverse : .unknown ]
     
     // True if the occupied/reserved state is unmonitored for this block (default = false)
     let isUnMonitored: Bool
@@ -50,7 +50,7 @@ final class Block: @unchecked Sendable, CustomStringConvertible {
     }
     
     // MARK: Block exit
-    func setExit(_ direction: Direction, _ exit: BlockExit) {
+    func setExit(_ direction: BlockDirection, _ exit: BlockExit) {
         blockExit[direction] = exit
     }
 }

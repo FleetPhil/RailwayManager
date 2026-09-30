@@ -10,28 +10,9 @@ import Foundation
 public typealias TrainID = Int
 
 public protocol HardwareTrain: Sendable {
-    func setSpeed(_ speed: Int, direction: Direction, delay: TimeInterval, session: Int) async throws
+    func setSpeed(_ speed: Int, direction: BlockDirection, delay: TimeInterval, session: Int) async throws
     func setFunction(_ function: Int, on: Bool, session: Int) async throws
     var address: Int { get }
-}
-
-public enum Direction: String, Codable, Sendable, CaseIterable, CustomStringConvertible {
-    case forward
-    case reverse
-    
-    var oppositeDirection: Direction {
-        switch self {
-        case .forward:      .reverse
-        case .reverse:      .forward
-        }
-    }
-    
-    public var description: String {
-        switch self {
-        case .forward:      "forward"
-        case .reverse:      "reverse"
-        }
-    }
 }
 
 public struct CBUSHardwareTrain: HardwareTrain, Sendable, CustomStringConvertible {
@@ -47,7 +28,7 @@ public struct CBUSHardwareTrain: HardwareTrain, Sendable, CustomStringConvertibl
         return "\(self.id)"
     }
     
-    public func setSpeed(_ speed: Int, direction: Direction, delay: TimeInterval, session: Int) async throws {
+    public func setSpeed(_ speed: Int, direction: BlockDirection, delay: TimeInterval, session: Int) async throws {
         try await CBUSManager.shared.powerTrain(session: session, direction: direction, speed: speed, delay: delay)
     }
     

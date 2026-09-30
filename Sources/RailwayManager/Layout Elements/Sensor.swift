@@ -33,7 +33,7 @@ enum SensorLocation: Comparable, Hashable {
     }
 
     // True if the start or only sensor in the block in the specified direction
-    func isStart(_ direction: Direction) -> Bool {
+    func isStart(_ direction: BlockDirection) -> Bool {
         switch self {
         case .start:    direction == .forward ? true : false
         case .single:   true
@@ -43,7 +43,7 @@ enum SensorLocation: Comparable, Hashable {
         }
     }
     // True if the end or only sensor in the block in the specified direction
-    func isEnd(_ direction: Direction) -> Bool {
+    func isEnd(_ direction: BlockDirection) -> Bool {
         switch self {
         case .start:    direction == .forward ? false : true
         case .single:   true
@@ -69,13 +69,13 @@ struct Sensor: Equatable, Sendable, CustomStringConvertible, Hashable {
     private(set) var location: SensorLocation
     // Signal(s) adjacent to this sensor (for station stops)
     // In the indicated direction
-    private(set) var signals: [ Direction : Signal]
+    private(set) var signals: [ BlockDirection : Signal]
 
     nonisolated var description: String {
         return "\(id)"
     }
     
-    init(id: Int, address: Int, location: SensorLocation, signals: [ Direction : Signal] = [:]) {
+    init(id: Int, address: Int, location: SensorLocation, signals: [ BlockDirection : Signal] = [:]) {
         self.id = id
         self.address = address
         self.location = location

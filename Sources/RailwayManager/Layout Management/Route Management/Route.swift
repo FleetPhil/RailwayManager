@@ -29,7 +29,7 @@ struct Route: CustomStringConvertible, Sendable {
     }
     
     // The direction for the first segment in the route
-    var initialDirection: Direction {
+    var initialDirection: BlockDirection {
         return segments.first?.path.direction ?? .forward
     }
 

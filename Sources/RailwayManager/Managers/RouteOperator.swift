@@ -349,7 +349,7 @@ actor RouteOperator {
     }
     
     // Return the delay before stopping for the train at this sensor and direction
-    private func stopDelay(sensor: Sensor, direction: Direction) -> TimeInterval {
+    private func stopDelay(sensor: Sensor, direction: BlockDirection) -> TimeInterval {
         switch sensor.location {
         case .station:
             // We need to stop after half a train length

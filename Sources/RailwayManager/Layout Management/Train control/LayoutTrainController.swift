@@ -3,7 +3,7 @@ import Foundation
 actor LayoutTrainController {
     private let dccSessionStore = DCCSessionStore()
     private(set) var trainStates: [ Train: TrainRuntimeState] = [:]
-    private(set) var trainDirections: [Train: Direction] = [:]
+    private(set) var trainDirections: [Train: BlockDirection] = [:]
 
     init() {
     }
@@ -67,7 +67,7 @@ actor LayoutTrainController {
         return session
     }
     
-    func trainDirection(_ train: Train) throws -> Direction {
+    func trainDirection(_ train: Train) throws -> BlockDirection {
         guard let state = trainDirections[train] else {
             throw TrainError.noTrainDirection(train.id)
         }
@@ -92,7 +92,7 @@ actor LayoutTrainController {
         }
     }
     
-    func setTrainDirection(_ train: Train, direction: Direction) throws {
+    func setTrainDirection(_ train: Train, direction: BlockDirection) throws {
         if let currentDirection = trainDirections[train] {
             if direction == currentDirection { return }
         }

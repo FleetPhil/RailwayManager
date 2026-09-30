@@ -14,7 +14,7 @@ import SwiftGraph
 // MARK: Graph and path functions
 extension Layout {
     // Return the Path between a pair of blocks (nil if no route)
-    func path(fromBlock: Block, toBlock: Block, direction: Direction) throws -> Path {
+    func path(fromBlock: Block, toBlock: Block, direction: BlockDirection) throws -> Path {
         let layoutGraph = direction == .forward ? forwardLayoutGraph : reverseLayoutGraph
         let blocks = layoutGraph.edgesToVertices(edges: layoutGraph.bfs(from: fromBlock.id, to: toBlock.id))
         
@@ -46,7 +46,7 @@ extension Layout {
         return Path(direction: direction, pathItems: pathItems)
     }
     
-    private func pathItemForTransition(fromBlock: Block, toBlock: Block, direction: Direction, role: PathItemRole) throws -> PathItem {
+    private func pathItemForTransition(fromBlock: Block, toBlock: Block, direction: BlockDirection, role: PathItemRole) throws -> PathItem {
         if let blockRoute = blockRoutes.first(where: {
             $0.fromBlock == fromBlock &&
             $0.toBlock == toBlock &&
@@ -64,7 +64,7 @@ extension Layout {
     // The layout graph builder.
     // Vertices are blocks, Edges are direct connections, single points or groups of points
     
-    func makeLayoutGraph(_ direction: Direction) -> UnweightedGraph<String> {
+    func makeLayoutGraph(_ direction: BlockDirection) -> UnweightedGraph<String> {
         let layoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: blocks.map({ $0.id }))
   
         blockRoutes.filter({ $0.direction == direction }).forEach({ route in
@@ -77,7 +77,7 @@ extension Layout {
         var routes: [BlockRoute] = []
 
         for block in blocks {
-            for direction in Direction.allCases {
+            for direction in BlockDirection.allCases {
                 guard let exit = block.blockExit[direction] else { continue }
                 switch exit {
                 case .unknown, .noExit:
@@ -140,47 +140,6 @@ extension Layout {
         return results
     }
 
-    // The direction attributes for a track resource used to identify the next connection
-    private enum TrackResourceDirection: CustomStringConvertible {
-        case block(Block, Direction?)
-        case point(Point, PointDirection)
-        
-        var description: String {
-            switch self {
-            case .block(let block, _):
-                "Block: \(block)"
-            case .point(let point, let pointDirection):
-                "Point: \(point), \(pointDirection)"
-            }
-        }
-        
-        var block: Block? {
-            switch self {
-            case .block(let block, _): block
-            case .point:               nil
-            }
-        }
-        
-        var point: Point? {
-            switch self {
-            case .point(let point, _): point
-            case .block:               nil
-            }
-        }
-        
-        var blockDirection: Direction? {
-            switch self {
-            case .block(_, let direction): direction
-            case .point:                nil
-            }
-        }
-        var pointDirection: PointDirection? {
-            switch self {
-            case .block:                nil
-            case .point(_, let direction): direction
-            }
-        }
-    }
 
     
 }
@@ -274,7 +233,7 @@ extension Layout {
         // Look for duplicated point settings from block exits
         var allPointSettings: [PointSetting] = []
         for block in self.blocks {
-            for direction in Direction.allCases {
+            for direction in BlockDirection.allCases {
                 if let blockExit = block.blockExit[direction] {
                     switch blockExit {
                     case .point(let pointSetting):

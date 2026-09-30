@@ -260,7 +260,7 @@ extension MQTTManager {
         struct SegmentParams: Codable, Sendable {
             var fromBlock: String
             var toBlock: String
-            var direction: Direction
+            var direction: BlockDirection
             var waitTime: WaitTime?         // No stop at segment end if nil
         }
         

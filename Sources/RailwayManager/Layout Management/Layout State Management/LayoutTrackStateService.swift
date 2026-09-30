@@ -137,7 +137,7 @@ actor LayoutTrackStateService {
         }
     }
     
-    func setDirectionForVacantContiguousBlocks(fromBlock: Block, train: Train, direction: Direction) async throws {
+    func setDirectionForVacantContiguousBlocks(fromBlock: Block, train: Train, direction: BlockDirection) async throws {
         for vacantBlock in layout.contiguousBlocks(fromBlock: fromBlock, direction: direction)
         .filter({ blockState($0)?.isVacant ?? true }) {
             try await setDirectionLock(block: vacantBlock, train: train)
@@ -469,7 +469,7 @@ actor LayoutTrackStateService {
 
 struct LayoutTrackSnapshot: Sendable {
     internal init(trainStates: [ Train : TrainRuntimeState],
-                  trainDirections: [Train : Direction],
+                  trainDirections: [Train : BlockDirection],
                   blockStates: [Block : BlockRuntimeState],
                   directionLocks: [Block: [Train]],
                   signalStates: [Signal : (SignalState, SignalState)],
@@ -485,7 +485,7 @@ struct LayoutTrackSnapshot: Sendable {
     private let blockStates: [Block: BlockRuntimeState]
     private let directionLocks: [Block: [Train]]
     private let trainStates: [Train: TrainRuntimeState]
-    private let trainDirections: [Train: Direction]
+    private let trainDirections: [Train: BlockDirection]
     private let signalStates: [Signal : (SignalState, SignalState)]
     private let pointStates: [ Point : PointRuntimeState]
 
@@ -504,8 +504,8 @@ struct LayoutTrackSnapshot: Sendable {
         return pointStates[point]?.reservedByTrain
     }
     
-    // Return the current direction for the block
-    func blockDirection(block: Block) -> Direction? {
+    // Return the travel direction of the train occupying the block (nil if none)
+    func travelDirection(in block: Block) -> BlockDirection? {
         if let train = blockState(block)?.train {
             return trainDirections[train]
         } else {

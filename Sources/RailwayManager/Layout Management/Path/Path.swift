@@ -9,7 +9,7 @@
 // Each path item specifies the point settings (if any) to move from one block to the next one
 
 struct Path: Equatable {
-    let direction: Direction
+    let direction: BlockDirection
     let pathItems: [PathItem]
 }
 

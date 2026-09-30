@@ -63,7 +63,7 @@ actor SignalCoordinator {
     
     // Follow the active path through the points until the next monitored block is reached, returning
     // the branch direction of the first point that is set to diverge, or nil if there is none
-    private static func divergingDirection(afterPoint point: Point, entering: PointDirection, direction: Direction, snapshot: LayoutTrackSnapshot) -> SignalState? {
+    private static func divergingDirection(afterPoint point: Point, entering: PointDirection, direction: BlockDirection, snapshot: LayoutTrackSnapshot) -> SignalState? {
         guard let currentDirection = snapshot.pointState(point)?.direction else { return nil }
         
         // No active path if the point is set against the entering branch
@@ -92,7 +92,7 @@ actor SignalCoordinator {
     }
     
     // Continue the walk through an unmonitored block to whatever follows it
-    private static func divergingDirection(afterBlock block: Block, direction: Direction, snapshot: LayoutTrackSnapshot) -> SignalState? {
+    private static func divergingDirection(afterBlock block: Block, direction: BlockDirection, snapshot: LayoutTrackSnapshot) -> SignalState? {
         switch block.blockExit[direction] {
         case .point(let pointSetting)?:
             return divergingDirection(afterPoint: pointSetting.point, entering: pointSetting.direction, direction: direction, snapshot: snapshot)

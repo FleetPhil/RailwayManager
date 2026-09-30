@@ -24,7 +24,7 @@ class Layout: @unchecked Sendable  {
     struct BlockRoute: CustomStringConvertible {
         var fromBlock: Block
         var toBlock: Block
-        var direction: Direction
+        var direction: BlockDirection
         var pointSettings: [PointSetting]
         
         var description: String {
@@ -76,7 +76,7 @@ class Layout: @unchecked Sendable  {
     }
     
     // Return the signal at the end of the block in the specified direction
-    func endSignalForBlock(_ block: Block, direction: Direction) -> Signal? {
+    func endSignalForBlock(_ block: Block, direction: BlockDirection) -> Signal? {
         return signals.first(where: {
             $0.direction == direction
             && $0.location == block
@@ -88,7 +88,7 @@ class Layout: @unchecked Sendable  {
     // End sensor is where the train should stop waiting for the next resource
     // Start and end sensors could be the same....
     
-    func sensorForBlock(_ block: Block, atBlockStart: Bool, inDirection: Direction) -> Sensor? {
+    func sensorForBlock(_ block: Block, atBlockStart: Bool, inDirection: BlockDirection) -> Sensor? {
         // Get all the sensors in this block
         let blockSensors = sensors.filter({ $0.block == block })
         
@@ -113,7 +113,7 @@ class Layout: @unchecked Sendable  {
     // Return the blocks starting with the parameter up to the next point in each direction
     // I.e. the blocks with no intervening points
     
-    func contiguousBlocks(fromBlock: Block, direction: Direction) -> [Block] {
+    func contiguousBlocks(fromBlock: Block, direction: BlockDirection) -> [Block] {
         var result: [Block] = [fromBlock]
         
         // Traverse the blocks from here

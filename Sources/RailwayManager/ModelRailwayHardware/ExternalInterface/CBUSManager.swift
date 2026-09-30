@@ -99,7 +99,7 @@ actor CBUSManager: Sendable {
         try sendCBUSMessage(CBUSMessage(opCode: .ASON1, device: address, dataBytes: [state.rawValue]))
     }
     
-    func powerTrain(session: Int, direction: Direction, speed: Int, delay: TimeInterval = 0) throws {
+    func powerTrain(session: Int, direction: BlockDirection, speed: Int, delay: TimeInterval = 0) throws {
         
         // Set the light if stopped and commanded to move
         if speed != 0 {

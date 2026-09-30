@@ -30,7 +30,7 @@ extension Signal {
         }
         
         // Deal with the case where the block direction conflicts with the signal direction
-        if let locationBlockDirection = snapshot.blockDirection(block: self.location) {
+        if let locationBlockDirection = snapshot.travelDirection(in: self.location) {
             if self.direction != locationBlockDirection {
                 return  .signalIndicationNotBlockDirection
             }
@@ -41,7 +41,7 @@ extension Signal {
         // TODO: reserved block signal should check if train is stopping
         case .occupied(let train):
             // Check the block direction
-            guard let signalBlockDirection = snapshot.blockDirection(block: self.location) else { return .unexpectedState }
+            guard let signalBlockDirection = snapshot.travelDirection(in: self.location) else { return .unexpectedState }
             if signalBlockDirection != self.direction {
                 // Block is occupied in the opposite direction or unknown state
                 return .signalBlockOccupiedOppositeDirection
@@ -76,7 +76,7 @@ extension Signal {
                 if reservedTrain == train { return .signalBlockOccupiedIndicatedBlockVacant }
                 
                 // reserved for another route - check the direction
-                let reservedDirection = snapshot.blockDirection(block: nextBlock)
+                let reservedDirection = snapshot.travelDirection(in: nextBlock)
                 return reservedDirection == self.direction ? .indicatedBlockOccupiedSameDirection : .indicatedBlockOccupiedOppositeDirection
             case .occupied, .vacating:
                 // Direction is not relevant
@@ -97,7 +97,7 @@ extension Signal {
             return .signalBlockVacantIndicatedBlockVacant
             
         case .reserved, .occupied, .vacating:
-            let nextBlockDirection = snapshot.blockDirection(block: nextBlock)
+            let nextBlockDirection = snapshot.travelDirection(in: nextBlock)
             return nextBlockDirection == self.direction ? .indicatedBlockOccupiedSameDirection : .indicatedBlockOccupiedOppositeDirection
         }
     }
