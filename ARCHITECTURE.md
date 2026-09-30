@@ -46,7 +46,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
                                    │  builds Cellar(), validates, connects MQTT, opens CBUS
                                    ▼
 MQTT /railway/route ──► monitorRouteRequests ──► LayoutManager.runRoute(route, train)
-console (sn/ss/x/st) ──► LayoutEventHub                    │
+console (sn/ss/x/st/dp) ──► LayoutEventHub                    │
                               ▲   │ (AsyncStream)          ▼
 CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.processEvent ─► RouteOperator (per train)
                                                           │                         │
@@ -136,7 +136,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
   - Out: DSPD (speed), DFNON/DFNOF (functions), RLOC/GLOC/KLOC/DKEEP (sessions), STOP, ARST, RDCC3 (DCC accessory packet for points), ASON2/ASOF (signals).
   - In: ASON1/ASOF1 (sensor set/unset with orientation), PLOC, ERR, STAT, ASOF3 (sensor statistics).
 - **MQTT** topics: `railway/state` (JSON `LayoutItemState`), `railway/topology` (block end-signals, signal locations, points), `railway/route` (incoming `RouteParams`). Default broker `192.168.86.56:1883` (env `MQTT_HOST`/`MQTT_PORT` or CLI).
-- **Console** (macOS): `sn<addr>` / `ss<addr>` simulate a north/south sensor pulse, `x` = shutdown (button 3), `st` = print status.
+- **Console** (macOS): `sn<addr>` / `ss<addr>` simulate a north/south sensor pulse, `x` = shutdown (button 3), `st` = print status, `dp` = write every block route and every block-to-block path (both directions) to a timestamped file in the home directory (`Layout.topologyDump()`), for diffing topology changes.
 - **LEDs**: blue = dormant, green = running (slow flash = ending), red = error. No-op on macOS; elsewhere driven via `CBUSManager.setLED` (currently an empty stub).
 
 ## 8. Error handling
@@ -196,9 +196,10 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 1. `Direction` renamed to `BlockDirection` (commit `6b087e5`, case names kept so layouts and MQTT JSON are unchanged).
 2. `DCCDirection` added for the hardware layer, with `dccDirection(_:)` as the single conversion point (commit `621acea`).
 3. Per-train facing (`trainFacing`, `facing(_:)`, `setTrainFacing`), defaulting to forward. Nothing changes facing yet.
+4a. Topology dump: console `dp` writes `Layout.topologyDump()` (sorted block routes, and the path or "no route" for every block pair in both directions) to `~/RailwayManager-topology-<Layout>-<timestamp>.txt`. A Cellar baseline taken before step 4 is diffed after each topology sub-step.
 
 ### Remaining steps (each a separate, behaviour-preserving commit where possible)
-4. **Topology**: `makeBlockRoutes()` records the travel direction entered into the next block (`traversePointChain` returns (block, entry direction)); replace the forward/reverse graphs with one graph whose vertices are block/direction pairs (e.g. `"A+"`, `"A-"`); `PathItem` gets `fromDirection`/`toDirection` and `Path.direction` becomes the starting direction; `contiguousBlocks()` returns (block, direction) pairs following flips; `layoutIsValid()` checks block→block links are symmetric. **Check: every Cellar path is identical before and after.**
+4. **Topology** (split into 4b entry direction on `BlockRoute` + symmetry check, 4c single block/direction graph and `PathItem` directions, 4d `contiguousBlocks()` following flips): `makeBlockRoutes()` records the travel direction entered into the next block (`traversePointChain` returns (block, entry direction)); replace the forward/reverse graphs with one graph whose vertices are block/direction pairs (e.g. `"A+"`, `"A-"`); `PathItem` gets `fromDirection`/`toDirection` and `Path.direction` becomes the starting direction; `contiguousBlocks()` returns (block, direction) pairs following flips; `layoutIsValid()` checks block→block links are symmetric. **Check: every Cellar path is identical before and after.**
 5. **Runtime state**: `BlockRuntimeState` carries the travel direction (`.occupied(train, BlockDirection)` etc.) because a train part-way round a loop occupies blocks in different directions; `snapshot.travelDirection(in:)` reads it from the block; direction locks store (train, direction) and compare per block.
 6. **Signals**: `nextMonitoredBlock` uses the travel direction in the unmonitored block, not the signal's; the distant-signal lookup in `SignalCoordinator` uses the direction in the next block.
 7. **RouteOperator**: sensor start/end checks, `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).

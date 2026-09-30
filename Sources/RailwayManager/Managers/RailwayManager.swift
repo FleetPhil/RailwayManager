@@ -247,6 +247,11 @@ struct RailwayManager: ParsableCommand {
         if input.starts(with: "st") {
             await layoutManager.printStatus()
         }
+
+        if input.starts(with: "dp") {            // Dump block routes and paths to a file
+            let url = try layoutManager.layout.writeTopologyDump()
+            log.info("Topology written to \(url.path)")
+        }
     }
 }
 

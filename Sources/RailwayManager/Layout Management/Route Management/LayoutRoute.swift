@@ -144,6 +144,42 @@ extension Layout {
     
 }
 
+// MARK: Diagnostics
+extension Layout {
+    // Text listing of every block route and every path between all block pairs in both directions.
+    // Output is sorted so that listings taken before and after a topology change can be diffed.
+    func topologyDump() -> String {
+        var lines: [String] = ["Layout \(type(of: self))", "", "Block routes:"]
+        lines += blockRoutes.map({ $0.description }).sorted()
+
+        lines += ["", "Paths:"]
+        let sortedBlocks = blocks.sorted(by: { $0.id < $1.id })
+        for fromBlock in sortedBlocks {
+            for toBlock in sortedBlocks where toBlock != fromBlock {
+                for direction in BlockDirection.allCases {
+                    let heading = "\(fromBlock)-\(toBlock) \(direction):"
+                    if let path = try? path(fromBlock: fromBlock, toBlock: toBlock, direction: direction) {
+                        lines.append("\(heading) \(path.direction) \(path.pathItems)")
+                    } else {
+                        lines.append("\(heading) no route")
+                    }
+                }
+            }
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    // Write topologyDump() to a timestamped file in the home directory and return its URL
+    func writeTopologyDump() throws -> URL {
+        let timestamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false)
+            .timeSeparator(.omitted))
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("RailwayManager-topology-\(type(of: self))-\(timestamp).txt")
+        try topologyDump().write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+}
+
 // MARK: Validation
 extension Layout {
     
