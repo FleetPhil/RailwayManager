@@ -74,9 +74,21 @@ actor LayoutTrainController {
         return state
     }
     
-    // Return which end of the train (front or rear) has set the sensor taking into account the moving direction
+    // The DCC direction to command so the train travels in its current block direction.
+    // This is the only place a BlockDirection is converted to a DCCDirection.
+    // It assumes every loco faces forward in the layout's block orientation, which holds
+    // for all current layouts (no reversing loops). Per-train facing will replace this.
+    func dccDirection(_ train: Train) throws -> DCCDirection {
+        switch try trainDirection(train) {
+        case .forward:      .forward
+        case .reverse:      .reverse
+        }
+    }
+    
+    // Return which end of the train (front or rear) has set the sensor taking into account
+    // the loco's DCC direction (the sensor magnets are fixed to the train, not the track)
     func trainSensorLocationForOrientation(train: Train, orientation: SensorEventOrientation) throws -> TrainSensor {
-        let direction = try trainDirection(train)
+        let direction = try dccDirection(train)
         if orientation == train.trainFrontSensorOrientation {           // Front sensor
             if direction == .forward {
                 return .front
@@ -139,7 +151,7 @@ actor LayoutTrainController {
                       speed: TrainSpeed,
                       delay: TimeInterval = 0) async throws {
         
-        let direction = try trainDirection(train)
+        let direction = try dccDirection(train)
         log.verbose("Train \(train) speed is \(speed) \(direction)")
 
         if GlobalOptions.noCBUS || GlobalOptions.noDCC {

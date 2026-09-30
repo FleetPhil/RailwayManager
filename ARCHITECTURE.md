@@ -31,7 +31,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 | `Train/`, `Params/` | `Train`, `TrainSpeed`, `TrainSensor`; `TrainParams`, `TrainSpeedSetting`, `TrainStartFunction` |
 | `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster); `Cellar Routes` (hard-coded test route) |
 | `MQTTManager/` | `MQTTManager` actor – telemetry publish, topology, route-request subscription, `RouteParams` |
-| `ModelRailwayHardware/` | Hardware abstraction: `HardwarePoint`/`DCCHardwarePoint`/`CBUSHardwarePoint`, `HardwareSignal`/`CBUSHardwareSignal`, `HardwareTrain`/`CBUSHardwareTrain`, `Led`, `Light`, `EventBus<T>`, `CBUSManager` (+ serial discovery, message encode/decode, op codes) |
+| `ModelRailwayHardware/` | Hardware abstraction: `HardwarePoint`/`DCCHardwarePoint`/`CBUSHardwarePoint`, `HardwareSignal`/`CBUSHardwareSignal`, `HardwareTrain`/`CBUSHardwareTrain`, `DCCDirection`, `Led`, `Light`, `EventBus<T>`, `CBUSManager` (+ serial discovery, message encode/decode, op codes) |
 | `Diagnostics/` | `printStatus()` dump of a snapshot |
 | `Errors/` | `TrainError` (with `isFatal`) |
 | `Extensions/` | Array `isUnique`, a `Queue`, async Sequence helpers, String helpers |
@@ -83,7 +83,8 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - **Point** – id, DCC address (`DCCHardwarePoint`, optional `reversedConnection`), `branchOrientation` (left/right, used for signal route indication), `connections[.single/.splitStraight/.splitBranch]` → block or another point (back-to-back points supported), optional `defaultPosition` (restored when freed).
 - **Signal** – location block, direction, `indication` (`.block` or `.point(point, leg)`), CBUS address (0 = dummy, not driven). Home + distant aspects: `off/stop/go/right/left`.
 - **Sensor** – id, CBUS address, `SensorLocation` `.start/.end(block, gap)` (relative to forward), `.single`, `.station`. Events carry north/south orientation which, with train direction and `Train.trainFrontSensorOrientation`, determines whether the **front or rear** of the train tripped it.
-- **BlockDirection** – `forward`/`reverse` travel direction relative to a block's own orientation (forward = towards the block's forward exit). Currently every layout is defined so all blocks share one orientation, and the same value is also sent as the DCC direction; separating the two (a `DCCDirection` type and per-train facing) is the planned next step towards supporting reversing loops.
+- **BlockDirection** – `forward`/`reverse` travel direction relative to a block's own orientation (forward = towards the block's forward exit). Currently every layout is defined so all blocks share one orientation.
+- **DCCDirection** – `forward`/`reverse` commanded to the loco decoder (loco-relative), used by the hardware layer (`HardwareTrain`, `CBUSMessage`, `CBUSManager.powerTrain`) and for working out which end of the train tripped a sensor. `LayoutTrainController.dccDirection(_:)` is the only conversion from `BlockDirection`; it is currently the identity (every loco assumed to face forward). Per-train facing is the planned next step towards supporting reversing loops.
 
 ### Derived at `buildLayout()`
 - `blockRoutes` – every legal block→block transition per direction with the point settings required, found by `makeBlockRoutes()` walking point chains (facing → both legs, trailing → single).

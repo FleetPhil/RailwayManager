@@ -13,7 +13,7 @@ struct CBUSMessage {
     var address: Int?
     var decoder: Int?
     var session: Int?
-    var direction: BlockDirection?
+    var direction: DCCDirection?
     var speed: Int?
     var cv: Int?
     var dataBytes: [UInt8]
@@ -24,7 +24,7 @@ struct CBUSMessage {
                   address: Int? = nil,
                   decoder: Int? = nil,
                   session: Int? = nil,
-                  direction: BlockDirection? = nil,
+                  direction: DCCDirection? = nil,
                   speed: Int? = nil,
                   cv: Int? = nil,
                   dataBytes: [UInt8] = []) {
