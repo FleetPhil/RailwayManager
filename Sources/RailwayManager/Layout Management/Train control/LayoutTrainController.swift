@@ -4,6 +4,10 @@ actor LayoutTrainController {
     private let dccSessionStore = DCCSessionStore()
     private(set) var trainStates: [ Train: TrainRuntimeState] = [:]
     private(set) var trainDirections: [Train: BlockDirection] = [:]
+    
+    // Which way each loco points: the block direction it travels in when commanded DCC forward.
+    // A train with no entry faces forward, the orientation all current layouts assume.
+    private(set) var trainFacing: [Train: BlockDirection] = [:]
 
     init() {
     }
@@ -74,15 +78,22 @@ actor LayoutTrainController {
         return state
     }
     
+    // Which way the loco points (defaults to forward)
+    func facing(_ train: Train) -> BlockDirection {
+        trainFacing[train] ?? .forward
+    }
+    
+    func setTrainFacing(_ train: Train, facing: BlockDirection) {
+        guard facing != self.facing(train) else { return }
+        log.verbose("Train \(train) now faces \(facing)")
+        trainFacing[train] = facing
+    }
+    
     // The DCC direction to command so the train travels in its current block direction.
-    // This is the only place a BlockDirection is converted to a DCCDirection.
-    // It assumes every loco faces forward in the layout's block orientation, which holds
-    // for all current layouts (no reversing loops). Per-train facing will replace this.
+    // This is the only place a BlockDirection is converted to a DCCDirection:
+    // DCC forward if the train is travelling the way the loco faces, otherwise DCC reverse.
     func dccDirection(_ train: Train) throws -> DCCDirection {
-        switch try trainDirection(train) {
-        case .forward:      .forward
-        case .reverse:      .reverse
-        }
+        try trainDirection(train) == facing(train) ? .forward : .reverse
     }
     
     // Return which end of the train (front or rear) has set the sensor taking into account

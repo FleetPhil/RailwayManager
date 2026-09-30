@@ -84,7 +84,8 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - **Signal** – location block, direction, `indication` (`.block` or `.point(point, leg)`), CBUS address (0 = dummy, not driven). Home + distant aspects: `off/stop/go/right/left`.
 - **Sensor** – id, CBUS address, `SensorLocation` `.start/.end(block, gap)` (relative to forward), `.single`, `.station`. Events carry north/south orientation which, with train direction and `Train.trainFrontSensorOrientation`, determines whether the **front or rear** of the train tripped it.
 - **BlockDirection** – `forward`/`reverse` travel direction relative to a block's own orientation (forward = towards the block's forward exit). Currently every layout is defined so all blocks share one orientation.
-- **DCCDirection** – `forward`/`reverse` commanded to the loco decoder (loco-relative), used by the hardware layer (`HardwareTrain`, `CBUSMessage`, `CBUSManager.powerTrain`) and for working out which end of the train tripped a sensor. `LayoutTrainController.dccDirection(_:)` is the only conversion from `BlockDirection`; it is currently the identity (every loco assumed to face forward). Per-train facing is the planned next step towards supporting reversing loops.
+- **DCCDirection** – `forward`/`reverse` commanded to the loco decoder (loco-relative), used by the hardware layer (`HardwareTrain`, `CBUSMessage`, `CBUSManager.powerTrain`) and for working out which end of the train tripped a sensor. `LayoutTrainController.dccDirection(_:)` is the only conversion from `BlockDirection`: DCC forward when the train's travel direction matches its **facing**, otherwise DCC reverse.
+- **Facing** – per train, the block direction the loco travels in when commanded DCC forward (`LayoutTrainController.trainFacing`, set with `setTrainFacing`). Defaults to forward, so on current layouts DCC direction always equals travel direction. Nothing changes facing yet; the next step towards reversing loops is per-path-item block directions, so facing can flip when a train crosses a flipping connection.
 
 ### Derived at `buildLayout()`
 - `blockRoutes` – every legal block→block transition per direction with the point settings required, found by `makeBlockRoutes()` walking point chains (facing → both legs, trailing → single).
@@ -174,3 +175,36 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - **New event**: add a case to `LayoutEvent` (+ `description`, `isRouteEvent`), publish via `LayoutEventHub.shared.publish`, handle in `LayoutManager.processEvent`.
 - **New CBUS message**: add op code in `CBUSOpCodes.swift`, encoding in `CBUSManager.sendCBUSMessage`, decoding in `processReceivedMessage`.
 - **New MQTT command**: extend `RouteParams.RouteCommand` and the switch in `RailwayManager.monitorRouteRequests`.
+
+## 11. Reversing loop support (in progress)
+
+### Problem
+Route finding and train control originally assumed one layout-wide meaning of "direction": `Layout.path()` searched a forward graph or a reverse graph, and commanding a train DCC-forward was assumed to move it forward in every block. A reversing loop breaks this: a train running DCC-forward goes out of a block in one direction and comes back through it in the other, so no single layout-wide orientation exists.
+
+### Design: three separate directions
+| Concept | Meaning | Changes when |
+|---|---|---|
+| **Travel direction in a block** (`BlockDirection`) | Which end of *that* block the train is heading for | Crossing a connection that flips orientation (the loop closure) |
+| **DCC direction** (`DCCDirection`) | Loco decoder forward/reverse | Only when the route reverses the train (segment boundary) |
+| **Facing** (per train, a `BlockDirection`) | Block direction the loco travels in when commanded DCC forward | Flips each time the train crosses a flipping connection |
+
+- DCC direction = forward if travel direction == facing, else reverse (`LayoutTrainController.dccDirection`).
+- Front/rear sensor detection uses the DCC direction (sensor magnets are fixed to the train).
+- Block orientation is already local in the layout data: sensor start/end, signal directions and block exits are all relative to each block. A flip can be **derived** from existing definitions — entering block B through the connection listed as B's `forward` exit means travelling `reverse` in B; for a direct block→block link, check which of Y's exits points back to X. No new layout data is needed, and layouts without loops (Cellar) have no flips.
+
+### Done
+1. `Direction` renamed to `BlockDirection` (commit `6b087e5`, case names kept so layouts and MQTT JSON are unchanged).
+2. `DCCDirection` added for the hardware layer, with `dccDirection(_:)` as the single conversion point (commit `621acea`).
+3. Per-train facing (`trainFacing`, `facing(_:)`, `setTrainFacing`), defaulting to forward. Nothing changes facing yet.
+
+### Remaining steps (each a separate, behaviour-preserving commit where possible)
+4. **Topology**: `makeBlockRoutes()` records the travel direction entered into the next block (`traversePointChain` returns (block, entry direction)); replace the forward/reverse graphs with one graph whose vertices are block/direction pairs (e.g. `"A+"`, `"A-"`); `PathItem` gets `fromDirection`/`toDirection` and `Path.direction` becomes the starting direction; `contiguousBlocks()` returns (block, direction) pairs following flips; `layoutIsValid()` checks block→block links are symmetric. **Check: every Cellar path is identical before and after.**
+5. **Runtime state**: `BlockRuntimeState` carries the travel direction (`.occupied(train, BlockDirection)` etc.) because a train part-way round a loop occupies blocks in different directions; `snapshot.travelDirection(in:)` reads it from the block; direction locks store (train, direction) and compare per block.
+6. **Signals**: `nextMonitoredBlock` uses the travel direction in the unmonitored block, not the signal's; the distant-signal lookup in `SignalCoordinator` uses the direction in the next block.
+7. **RouteOperator**: sensor start/end checks, `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).
+8. **Test layout**: add a small `TestLoop` layout with a reversing loop and run a turn-round route using the console sensor commands (`sn<addr>` / `ss<addr>`).
+
+### Loop-specific considerations
+- Initial facing must be known; currently defaults to forward. May later come from config, a route request, or be persisted.
+- Track polarity: none needed with an auto-reverser; if a relay is used, model it as a resource set with the path item, switched only while the train is wholly inside the loop.
+- The loop must be longer than the train; reservation should treat the loop as a unit so a train cannot enter it without being able to leave.
