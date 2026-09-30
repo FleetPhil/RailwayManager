@@ -114,7 +114,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 1. `LayoutManager.runRoute` creates/reuses the train's operator → `resetRoute` (validates start block, requests DCC session, marks start block occupied) → publishes `didStartRoute`.
 2. `handleStartRouteEvent`: state `.starting`, set direction, stop, light (F0) on; run the train's start functions (sounds) in a separate task, then `.active` and `processOccupiedRouteBlock()`.
 3. `processNextFrontPathItem` advances the **front** index, sets direction for the segment, then `reserveOrRun`: reserve the next block/points/locks; if blocked → `stoppingForResource`, else set points and `running`.
-4. **Sensor events** (`handleSensorSet`), classified by front/rear and start/end of block:
+4. **Sensor events** (`handleSensorSet`), classified by front/rear (from the DCC direction) and start/end of block (from the travel direction in the sensor's block, read from its block state, falling back to the train's direction if the block is not held by the train):
    - front at start of `toBlock` → block occupied, previous vacating, advance;
    - front inside `toBlock` → `checkForTrainStop` (timer stop, or `endRoute` if `.ending`);
    - front at end of `fromBlock` while still waiting → stop (`stoppedForResource`/`stoppedAtSensor`) or mark vacating;
@@ -203,11 +203,12 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 5a. Direction locks store (train, direction) per block (`DirectionLock`) and are checked against the travel direction in each block; `reservePathItem` starts from the path item's `toDirection` and ignores the reserving train's own locks. Only differs from before if a train reverses while still holding locks ahead of it: those locks keep their original direction, where previously they took the train's new direction.
 5b. `BlockRuntimeState` carries the train's travel direction in each block, and `snapshot.travelDirection(in:)` reads it from there instead of the train's single direction (the snapshot no longer holds train directions). When a new segment reverses the train, `RouteOperator.processNextFrontPathItem` calls `reverseTravelDirection(of:)` to flip the direction in every block the train holds, matching the old behaviour where all its blocks followed the train's direction.
 6. Signals: `Signal.nextBlock` returns (block, direction) and the next-block direction checks in `signalIndication`, the distant-signal lookup and the diverging-route walk through unmonitored blocks use it instead of the signal's direction. `entryDirection` moved from `Layout` to `Block` so signal code can use it. `layoutIsValid()` checks each signal's indication matches its block exit (all Cellar signals do).
+7a. `RouteOperator.handleSensorSet` works out start/end of block from the travel direction in the sensor's block (its block state) instead of the train's direction.
 
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).
 
 ### Remaining steps (each a separate, behaviour-preserving commit where possible)
-7. **RouteOperator**: sensor start/end checks, `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).
+7. **RouteOperator** (remaining: 7b speed and stopping, 7c facing): `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).
 8. **Test layout**: add a small `TestLoop` layout with a reversing loop and run a turn-round route using the console sensor commands (`sn<addr>` / `ss<addr>`).
 
 ### Loop-specific considerations

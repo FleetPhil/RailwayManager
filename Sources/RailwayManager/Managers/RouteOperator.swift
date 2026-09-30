@@ -252,10 +252,18 @@ actor RouteOperator {
         let trainSensor =
             try await trainController.trainSensorLocationForOrientation(train: train, orientation: orientation)
 
-        // First update the block states
-        let trainDirection = try await trainController.trainDirection(train)
-        let isStartOfBlock = sensor.location.isStart(trainDirection)
-        let isEndOfBlock = sensor.location.isEnd(trainDirection)
+        // Start/end of block depends on the train's travel direction in the sensor's block,
+        // which differs from the train's direction part-way round a reversing loop.
+        // The block should be held by this train; if not, fall back to the train's direction.
+        let sensorBlockDirection: BlockDirection
+        if let blockState = await stateService.blockState(sensor.block),
+           blockState.train == train, let direction = blockState.direction {
+            sensorBlockDirection = direction
+        } else {
+            sensorBlockDirection = try await trainController.trainDirection(train)
+        }
+        let isStartOfBlock = sensor.location.isStart(sensorBlockDirection)
+        let isEndOfBlock = sensor.location.isEnd(sensorBlockDirection)
         
         // MARK: Sensor set scenarios
         switch trainSensor {
