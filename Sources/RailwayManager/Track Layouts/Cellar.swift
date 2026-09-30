@@ -105,7 +105,7 @@ class Cellar: Layout, @unchecked Sendable {
         signals = [
             Signal(id: 1, address: 0, location: block("A"), indication: .point(point(7), .splitStraight), direction: .reverse),
             Signal(id: 2, address: 215, location: block("A"), indication: .point(point(3), .splitStraight), direction: .forward),
-//            Signal(id: 3, address: 0, location: block("B"), indication: .point(point(8), .single), direction: .reverse),
+            Signal(id: 3, address: 0, location: block("B"), indication: .point(point(8), .single), direction: .reverse),
             Signal(id: 4, address: 217, location: block("B"), indication: .point(point(1), .splitStraight), direction: .forward),
             Signal(id: 6, address: 211, location: block("C"), indication: .point(point(1), .splitBranch), direction: .forward),
             Signal(id: 7, address: 0, location: block("D"), indication: .point(point(3), .single), direction: .reverse),
