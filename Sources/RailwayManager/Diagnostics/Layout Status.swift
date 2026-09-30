@@ -22,7 +22,7 @@ extension LayoutTrackStateService {
             }
             
             if let locks = snapshot.directionLocks(block) {
-                log.verbose("\(block) locks: \(locks.map({ $0.id }))")
+                log.verbose("\(block) locks: \(locks.map({ "\($0.train.id) \($0.direction)" }))")
             }
         }
         

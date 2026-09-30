@@ -58,8 +58,13 @@ actor LayoutTrackStateService {
     
     private let layout: Layout
     
-    // The trains that have direction locks for each block
-    private var directionLocks: [Block : [Train]] = [:]
+    // The direction locks for each block: a train that expects to travel through the block in that direction
+    private var directionLocks: [Block : [DirectionLock]] = [:]
+    
+    // The trains holding direction locks on a block (for telemetry)
+    private func lockedTrains(_ block: Block) -> [Train] {
+        directionLocks[block]?.map(\.train) ?? []
+    }
     
     init(layout: Layout) {
         self.layout = layout
@@ -138,9 +143,9 @@ actor LayoutTrackStateService {
     }
     
     func setDirectionForVacantContiguousBlocks(fromBlock: Block, train: Train, direction: BlockDirection) async throws {
-        for vacantBlock in layout.contiguousBlocks(fromBlock: fromBlock, direction: direction).map(\.block)
-        .filter({ blockState($0)?.isVacant ?? true }) {
-            try await setDirectionLock(block: vacantBlock, train: train)
+        for (vacantBlock, blockDirection) in layout.contiguousBlocks(fromBlock: fromBlock, direction: direction)
+        where blockState(vacantBlock)?.isVacant ?? true {
+            try await setDirectionLock(block: vacantBlock, train: train, direction: blockDirection)
         }
     }
     
@@ -246,55 +251,35 @@ actor LayoutTrackStateService {
         // Release any direction lock for this train and block
         guard let locks = directionLocks[block] else { return }
         
-        if locks.contains(train) {
-            if let trainIndex = locks.firstIndex(of: train) {
-                directionLocks[block]!.remove(at: trainIndex)
-                if directionLocks[block]!.isEmpty {
-                    directionLocks[block] = nil
-                }
-                
-                // Publish change
-                try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: blockStates[block]!, directionLocks: directionLocks[block] ?? [])
-                
-            } else {
-                throw TrainError.noLockToRelease(block, train)
+        if let trainIndex = locks.firstIndex(where: { $0.train == train }) {
+            directionLocks[block]!.remove(at: trainIndex)
+            if directionLocks[block]!.isEmpty {
+                directionLocks[block] = nil
             }
+            
+            // Publish change
+            try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: blockStates[block]!, directionLocks: lockedTrains(block))
         }
     }
 
-    func setDirectionLock(block: Block, train: Train) async throws {
+    func setDirectionLock(block: Block, train: Train, direction: BlockDirection) async throws {
         // Set the direction lock for this train and block - which must not exist
-        if let locks = directionLocks[block] {
-            if locks.contains(train) {
-                throw TrainError.lockAlreadyExists(block, train)
-            } else {
-                // Check the direction on current locks
-                let currentLockedDirection = try await trainController.trainDirection(locks.first!)
-                let trainDirection = try await trainController.trainDirection(train)
-                
-                if currentLockedDirection == trainDirection {
-                    directionLocks[block]!.append(train)
-                } else {
-                    throw TrainError.applicationError("Can't lock block \(block) for train \(train): locked in opposite direction")
-                }
-            }
-        } else {
-            // No current locked direction
-            directionLocks[block, default: []].append(train)
+        let locks = directionLocks[block] ?? []
+        if locks.contains(where: { $0.train == train }) {
+            throw TrainError.lockAlreadyExists(block, train)
         }
+        if locks.contains(where: { $0.direction != direction }) {
+            throw TrainError.applicationError("Can't lock block \(block) for train \(train): locked in opposite direction")
+        }
+        directionLocks[block, default: []].append(DirectionLock(train: train, direction: direction))
         
         // Publish change
-        try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: .vacant, directionLocks: directionLocks[block]!)
+        try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: .vacant, directionLocks: lockedTrains(block))
     }
 
     // Path Item is a block-block transition, maybe involving 1 or more points
     // This function is called when the next transition is required
     func reservePathItem(_ item: PathItem, forTrain: Train) async throws -> TrackResource? {
-        // Fetch the train directions before checking: the check-and-reserve section below must
-        // not suspend, otherwise a reentrant call could reserve the same resources for another train
-        let trainDirection = try await trainController.trainDirection(forTrain)
-        let trainDirections = await trainController.trainDirections
-        
         // MARK: Critical section: no awaits until all resources are marked reserved
         let oldState = blockStates[item.toBlock] ?? .vacant
         switch oldState {
@@ -310,18 +295,14 @@ actor LayoutTrackStateService {
             }
         }
         
-        // Check any opposite direction locks on contiguous blocks
-        let contiguousBlocks = layout.contiguousBlocks(fromBlock: item.toBlock, direction: trainDirection).map(\.block)
-        for contiguousBlock in contiguousBlocks {
-            if let lockedTrain = directionLocks[contiguousBlock]?.first {
-                guard let lockedTrainDirection = trainDirections[lockedTrain] else {
-                    throw TrainError.noTrainDirection(lockedTrain.id)
-                }
-                if lockedTrainDirection != trainDirection {
-                    // Block is locked in opposite direction
-                    log.verbose("Reserve fails for locked block \(contiguousBlock), direction \(lockedTrainDirection)")
-                    return .block(item.toBlock)
-                }
+        // Check for other trains' direction locks against the travel direction in each contiguous block.
+        // The train's own locks are ignored: they may be left from before it last reversed.
+        let contiguousBlocks = layout.contiguousBlocks(fromBlock: item.toBlock, direction: item.toDirection)
+        for (contiguousBlock, blockDirection) in contiguousBlocks {
+            if let lock = directionLocks[contiguousBlock]?.first(where: { $0.train != forTrain && $0.direction != blockDirection }) {
+                // Block is locked in opposite direction
+                log.verbose("Reserve fails for locked block \(contiguousBlock), direction \(lock.direction)")
+                return .block(item.toBlock)
             }
         }
         
@@ -340,12 +321,12 @@ actor LayoutTrackStateService {
         }
         blockStates[item.toBlock] = .reserved(forTrain)
         
-        for vacantBlock in contiguousBlocks where blockStates[vacantBlock]?.isVacant ?? true {
-            if directionLocks[vacantBlock]?.contains(forTrain) == true {
+        for (vacantBlock, blockDirection) in contiguousBlocks where blockStates[vacantBlock]?.isVacant ?? true {
+            if directionLocks[vacantBlock]?.contains(where: { $0.train == forTrain }) == true {
                 throw TrainError.lockAlreadyExists(vacantBlock, forTrain)
             }
             // Lock directions were checked above, so the lock can be added
-            try await setDirectionLock(block: vacantBlock, train: forTrain)
+            try await setDirectionLock(block: vacantBlock, train: forTrain, direction: blockDirection)
         }
         
         for point in item.pointSettings.map( \.point ) {
@@ -359,7 +340,7 @@ actor LayoutTrackStateService {
         }
         
         // Telemetry: a publish failure must not fail the reservation
-        try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain), directionLocks: directionLocks[item.toBlock] ?? [])
+        try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain), directionLocks: lockedTrains(item.toBlock))
         
         return nil
     }
@@ -467,11 +448,18 @@ actor LayoutTrackStateService {
 
 }
 
+// A train expecting to travel through a vacant block in the given direction.
+// Another train can't enter the block in the opposite direction while it is held.
+struct DirectionLock: Sendable, Equatable {
+    let train: Train
+    let direction: BlockDirection
+}
+
 struct LayoutTrackSnapshot: Sendable {
     internal init(trainStates: [ Train : TrainRuntimeState],
                   trainDirections: [Train : BlockDirection],
                   blockStates: [Block : BlockRuntimeState],
-                  directionLocks: [Block: [Train]],
+                  directionLocks: [Block: [DirectionLock]],
                   signalStates: [Signal : (SignalState, SignalState)],
                   pointStates: [ Point : PointRuntimeState]) {
         self.blockStates = blockStates
@@ -483,7 +471,7 @@ struct LayoutTrackSnapshot: Sendable {
     }
     
     private let blockStates: [Block: BlockRuntimeState]
-    private let directionLocks: [Block: [Train]]
+    private let directionLocks: [Block: [DirectionLock]]
     private let trainStates: [Train: TrainRuntimeState]
     private let trainDirections: [Train: BlockDirection]
     private let signalStates: [Signal : (SignalState, SignalState)]
@@ -495,7 +483,7 @@ struct LayoutTrackSnapshot: Sendable {
     var allPoints: [Point] { Array(pointStates.keys) }
 
     func blockState(_ block: Block) -> BlockRuntimeState? { blockStates[block] }
-    func directionLocks(_ block: Block) -> [Train]? { directionLocks[block] }
+    func directionLocks(_ block: Block) -> [DirectionLock]? { directionLocks[block] }
     func trainState(_ train: Train) -> TrainRuntimeState? { trainStates[train] }
     func signalState(_ signal: Signal) -> (SignalState, SignalState)? { signalStates[signal] }
     func pointState(_ point: Point) -> PointRuntimeState? { pointStates[point] }

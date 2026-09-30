@@ -101,7 +101,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 ### Runtime state (`LayoutTrackStateService`)
 - Block: `vacant | reserved(train) | occupied(train) | vacating(train)`, transitions validated in `setStateForBlock`; freeing a block publishes `didFreeResource(.block)`.
 - Point: direction, `reservedByTrain`, `freeWithBlock` (points are released when the block they were reserved from is freed).
-- **Direction locks**: when a train reserves a block, all vacant contiguous blocks ahead (up to the next point) are locked to its direction; opposing trains can't reserve into them.
+- **Direction locks** (`DirectionLock`: train + direction): when a train reserves a block, all vacant contiguous blocks ahead (up to the next point) are locked with the travel direction in each block (from `contiguousBlocks()` starting at the path item's `toDirection`). A train can't reserve a block if another train holds a lock in the opposite direction on it or any block contiguous beyond it; the reserving train's own locks are ignored, since they may be left from before it reversed. The check uses only stored lock directions, so it no longer awaits the train controller before the critical section.
 - Signals: cached `(home, distant)`; recomputed from a `LayoutTrackSnapshot`.
 
 ### Train runtime (`LayoutTrainController`)
@@ -158,7 +158,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Several signals/sensors in `Cellar` have address 0 (not wired yet); station sensors for H/J commented out.
 
 **Dead / legacy code**
-- `Resources/params.json`, `trainParams.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `Layout.trains` / `Layout.train(_:)`, `TestTrack2`, `TramSplit`, SunCalc dependency.
+- `Resources/params.json`, `trainParams.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `Layout.trains` / `Layout.train(_:)`, `TestTrack2`, `TramSplit`, SunCalc dependency.
 - `.swiftpm/xcode/ModelRailwayHardware/` held an older standalone copy of the hardware package, since merged into `Sources/ModelRailwayHardware/`. The folder is now empty, but the repo still tracks it as a submodule gitlink (mode 160000) with no `.gitmodules` entry, so `git submodule` commands fail. `git rm --cached .swiftpm/xcode/ModelRailwayHardware` removes the orphan entry.
 
 **Design observations**
@@ -199,12 +199,13 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 4a. Topology dump: console `dp` writes `Layout.topologyDump()` (sorted block routes, and the path or "no route" for every block pair in both directions) to `~/RailwayManager-topology-<Layout>-<timestamp>.txt`. A Cellar baseline taken before step 4 is diffed after each topology sub-step.
 4b. `BlockRoute.toDirection` (entry direction into the next block); `traversePointChain` also returns the point leg that connects to the block; `layoutIsValid()` requires links to be matched by the receiving block's exits.
 4c. Single `layoutGraph` of block/direction vertices replaces the forward/reverse graphs; `path()` searches to the target block in either direction; `PathItem` has `fromDirection`/`toDirection`. Nothing reads the path item directions yet. `layoutIsValid()` logs success at info level.
-4d. `contiguousBlocks()` returns (block, direction) pairs, following direction changes across block→block links and stopping if a block repeats. Its callers in `LayoutTrackStateService` still use only the blocks (and the train's direction) until step 5.
+4d. `contiguousBlocks()` returns (block, direction) pairs, following direction changes across block→block links and stopping if a block repeats.
+5a. Direction locks store (train, direction) per block (`DirectionLock`) and are checked against the travel direction in each block; `reservePathItem` starts from the path item's `toDirection` and ignores the reserving train's own locks. Only differs from before if a train reverses while still holding locks ahead of it: those locks keep their original direction, where previously they took the train's new direction.
 
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).
 
 ### Remaining steps (each a separate, behaviour-preserving commit where possible)
-5. **Runtime state**: direction-lock checks in `LayoutTrackStateService` (`reservePathItem`, `setDirectionForVacantContiguousBlocks`) use the direction per block from `contiguousBlocks()` rather than the train's direction; `BlockRuntimeState` carries the travel direction (`.occupied(train, BlockDirection)` etc.) because a train part-way round a loop occupies blocks in different directions; `snapshot.travelDirection(in:)` reads it from the block; direction locks store (train, direction) and compare per block.
+5. **Runtime state** (remaining): `BlockRuntimeState` carries the travel direction (`.occupied(train, BlockDirection)` etc.) because a train part-way round a loop occupies blocks in different directions; `snapshot.travelDirection(in:)` reads it from the block.
 6. **Signals**: `nextMonitoredBlock` uses the travel direction in the unmonitored block, not the signal's; the distant-signal lookup in `SignalCoordinator` uses the direction in the next block.
 7. **RouteOperator**: sensor start/end checks, `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).
 8. **Test layout**: add a small `TestLoop` layout with a reversing loop and run a turn-round route using the console sensor commands (`sn<addr>` / `ss<addr>`).

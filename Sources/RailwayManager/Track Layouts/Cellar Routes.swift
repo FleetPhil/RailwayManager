@@ -12,10 +12,10 @@ extension RailwayManager {
         let layout = layoutManager.layout
 
         let path11 = try layout.path(fromBlock: layout.block("B"),
-                                    toBlock: layout.block("A"),
+                                    toBlock: layout.block("G"),
                                     direction: .forward)
         let segment1 = Segment(path: path11, waitTime: .none)
-        let path12 = try layout.path(fromBlock: layout.block("A"),
+        let path12 = try layout.path(fromBlock: layout.block("G"),
                                     toBlock: layout.block("B"),
                                     direction: .forward)
         let segment2 = Segment(path: path12, waitTime: .none)

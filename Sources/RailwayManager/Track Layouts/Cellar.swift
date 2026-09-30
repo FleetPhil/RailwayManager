@@ -140,11 +140,11 @@ class Cellar: Layout, @unchecked Sendable {
             Sensor(id: 7, address: 143, location: .start(block("D"), 10)),
             Sensor(id: 8, address: 162, location: .end(block("D"), 10)),
 
-            Sensor(id: 9, address: 0, location: .start(block("E"), 10)),
-            Sensor(id: 10, address: 0, location: .end(block("E"), 10)),
+            Sensor(id: 9, address: 19, location: .start(block("E"), 10)),
+            Sensor(id: 10, address: 20, location: .end(block("E"), 10)),
 
-            Sensor(id: 11, address: 0, location: .start(block("G"), 10)),
-            Sensor(id: 12, address: 0,location: .end(block("G"), 10)),
+            Sensor(id: 11, address: 21, location: .start(block("G"), 10)),
+            Sensor(id: 12, address: 22,location: .end(block("G"), 10)),
 
             Sensor(id: 13, address: 161, location: .start(block("H"), 10)),
             Sensor(id: 14, address: 202, location: .end(block("H"), 10)),
