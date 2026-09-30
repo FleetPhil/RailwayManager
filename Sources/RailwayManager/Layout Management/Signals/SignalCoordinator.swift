@@ -22,12 +22,16 @@ actor SignalCoordinator {
             }
 
             // Find a signal in the next block for the direction a train passing this signal travels in it
-            // if it is set to red update the current signal distant state
-            if let nextBlock = signal.nextBlock(snapshot: snapshot),
-               let signalForBlock = snapshot.allSignals.first(where: {
-                $0.location == nextBlock.block && $0.direction == nextBlock.direction
-            }) {
-                distantState[signal] = homeState[signalForBlock]
+            // and repeat its home state as this signal's distant state.
+            // With no signal ahead (e.g. a siding or buffer stop) the distant shows caution.
+            if let nextBlock = signal.nextBlock(snapshot: snapshot) {
+                if let signalForBlock = snapshot.allSignals.first(where: {
+                    $0.location == nextBlock.block && $0.direction == nextBlock.direction
+                }) {
+                    distantState[signal] = homeState[signalForBlock]
+                } else {
+                    distantState[signal] = .stop
+                }
             }
         }
         

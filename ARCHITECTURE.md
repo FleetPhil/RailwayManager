@@ -128,7 +128,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Each signal finds its **next monitored block** following its indication and current point positions (points against → stop), together with the travel direction in it of a train passing the signal (derived with `Block.entryDirection(through:)`; equal to the signal's direction except across a loop closure). Unmonitored blocks are passed through in their own travel direction.
 - Home aspect `go` only if the signal block is vacant/occupied in the signal's direction and the next block is vacant or reserved for the same train; otherwise `stop`.
 - `go` becomes `left/right` if the first point on the route is set to diverge (uses `branchOrientation`).
-- Distant aspect = home aspect of the signal in the next block for the direction a train passing this signal travels in that block.
+- Distant aspect = home aspect of the signal in the next block for the direction a train passing this signal travels in that block. If there is no such signal (siding, buffer stop), the distant shows caution (`stop`). The distant is only set while the home aspect is `go` (or a diverging aspect); otherwise it is `off`.
 - Only changed signals are sent to hardware (CBUS ASON2 with home+distant bytes) and MQTT.
 
 ## 7. Hardware / external interfaces
