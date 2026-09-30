@@ -110,22 +110,23 @@ class Layout: @unchecked Sendable  {
         return sensors.filter({ $0.block == block }).first(where: { $0.isStation })
     }
     
-    // Return the blocks starting with the parameter up to the next point in each direction
-    // I.e. the blocks with no intervening points
+    // Return the blocks starting with the parameter up to the next point in the given direction,
+    // i.e. the blocks with no intervening points, with the travel direction in each.
+    // The direction changes if a block -> block link is a loop closure.
     
-    func contiguousBlocks(fromBlock: Block, direction: BlockDirection) -> [Block] {
-        var result: [Block] = [fromBlock]
+    func contiguousBlocks(fromBlock: Block, direction: BlockDirection) -> [(block: Block, direction: BlockDirection)] {
+        var result: [(block: Block, direction: BlockDirection)] = [(fromBlock, direction)]
         
-        // Traverse the blocks from here
-        while true {
-            if let next = result.last!.blockExit[direction]?.contiguousBlock {
-                result.append(next)
-            } else {
-                break
-            }
+        // Traverse the blocks from here, stopping if a block repeats (a circle with no points)
+        while let current = result.last,
+              let next = current.block.blockExit[current.direction]?.contiguousBlock,
+              result.contains(where: { $0.block == next }) == false {
+            // An unmatched link is reported by layoutIsValid(); keep the direction meanwhile
+            let nextDirection = entryDirection(into: next, through: .block(current.block)) ?? current.direction
+            result.append((next, nextDirection))
         }
         
-        log.verbose("Contiguous from \(fromBlock), \(direction): \(result.map({ $0 }))")
+        log.verbose("Contiguous from \(fromBlock), \(direction): \(result.map({ "\($0.block) \($0.direction)" }))")
         
         return result
     }

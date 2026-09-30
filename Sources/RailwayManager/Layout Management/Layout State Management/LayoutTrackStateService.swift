@@ -138,7 +138,7 @@ actor LayoutTrackStateService {
     }
     
     func setDirectionForVacantContiguousBlocks(fromBlock: Block, train: Train, direction: BlockDirection) async throws {
-        for vacantBlock in layout.contiguousBlocks(fromBlock: fromBlock, direction: direction)
+        for vacantBlock in layout.contiguousBlocks(fromBlock: fromBlock, direction: direction).map(\.block)
         .filter({ blockState($0)?.isVacant ?? true }) {
             try await setDirectionLock(block: vacantBlock, train: train)
         }
@@ -311,7 +311,7 @@ actor LayoutTrackStateService {
         }
         
         // Check any opposite direction locks on contiguous blocks
-        let contiguousBlocks = layout.contiguousBlocks(fromBlock: item.toBlock, direction: trainDirection)
+        let contiguousBlocks = layout.contiguousBlocks(fromBlock: item.toBlock, direction: trainDirection).map(\.block)
         for contiguousBlock in contiguousBlocks {
             if let lockedTrain = directionLocks[contiguousBlock]?.first {
                 guard let lockedTrainDirection = trainDirections[lockedTrain] else {
