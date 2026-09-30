@@ -53,6 +53,15 @@ final class Block: @unchecked Sendable, CustomStringConvertible {
     func setExit(_ direction: BlockDirection, _ exit: BlockExit) {
         blockExit[direction] = exit
     }
+    
+    // Travel direction on entering this block through `exit`, the connection as it appears in the block's own exits.
+    // Arriving through the block's forward exit means travelling reverse in it, and vice versa.
+    // Nil if the block has no matching exit, or both its exits match (ambiguous).
+    func entryDirection(through exit: BlockExit) -> BlockDirection? {
+        let matching = BlockDirection.allCases.filter({ blockExit[$0] == exit })
+        guard matching.count == 1, let exitDirection = matching.first else { return nil }
+        return exitDirection.oppositeDirection
+    }
 }
 
 extension Block: Equatable, Hashable {

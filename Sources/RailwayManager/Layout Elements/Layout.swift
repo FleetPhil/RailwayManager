@@ -122,7 +122,7 @@ class Layout: @unchecked Sendable  {
               let next = current.block.blockExit[current.direction]?.contiguousBlock,
               result.contains(where: { $0.block == next }) == false {
             // An unmatched link is reported by layoutIsValid(); keep the direction meanwhile
-            let nextDirection = entryDirection(into: next, through: .block(current.block)) ?? current.direction
+            let nextDirection = next.entryDirection(through: .block(current.block)) ?? current.direction
             result.append((next, nextDirection))
         }
         

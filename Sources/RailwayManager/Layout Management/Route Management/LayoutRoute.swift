@@ -81,15 +81,6 @@ extension Layout {
         vertex.last == "+" ? .forward : .reverse
     }
     
-    // Travel direction on entering `block` through `exit`, the connection as it appears in the block's own exits.
-    // Arriving through the block's forward exit means travelling reverse in it, and vice versa.
-    // Nil if the block has no matching exit, or both its exits match (ambiguous).
-    func entryDirection(into block: Block, through exit: BlockExit) -> BlockDirection? {
-        let matching = BlockDirection.allCases.filter({ block.blockExit[$0] == exit })
-        guard matching.count == 1, let exitDirection = matching.first else { return nil }
-        return exitDirection.oppositeDirection
-    }
-    
     // The layout graph builder.
     // Vertices are (block, travel direction) pairs, Edges are block routes: direct connections,
     // single points or groups of points. An edge changes direction only across a loop closure.
@@ -116,7 +107,7 @@ extension Layout {
                     break
                 case .block(let toBlock):
                     // An unmatched link is reported by layoutIsValid(); keep the direction meanwhile
-                    let toDirection = entryDirection(into: toBlock, through: .block(block)) ?? direction
+                    let toDirection = toBlock.entryDirection(through: .block(block)) ?? direction
                     routes.append(BlockRoute(fromBlock: block, toBlock: toBlock, direction: direction,
                                              toDirection: toDirection, pointSettings: []))
                 case .point(let pointSetting):
@@ -126,7 +117,7 @@ extension Layout {
                                                    visited: [])
                     for (toBlock, settings, exitLeg) in paths {
                         // An unmatched link is reported by layoutIsValid(); keep the direction meanwhile
-                        let toDirection = entryDirection(into: toBlock, through: .point(exitLeg)) ?? direction
+                        let toDirection = toBlock.entryDirection(through: .point(exitLeg)) ?? direction
                         routes.append(BlockRoute(fromBlock: block, toBlock: toBlock, direction: direction,
                                                  toDirection: toDirection, pointSettings: settings))
                     }
@@ -233,7 +224,7 @@ extension Layout {
                         return false
                     }
                     // Block -> block links must be defined on both blocks, so the entry direction can be derived
-                    if entryDirection(into: exitBlock, through: .block(block)) == nil {
+                    if exitBlock.entryDirection(through: .block(block)) == nil {
                         log.error("Block \(block.id) exits to block \(exitBlock.id), which needs exactly one exit back to \(block.id)")
                         return false
                     }
@@ -285,6 +276,16 @@ extension Layout {
                     log.error("Signal \(signal.id) indicates unknown point \(indicatedPoint.id)")
                     return false
                 }
+            }
+            // The indication must be the location block's exit in the signal's direction,
+            // as the direction beyond the signal is derived from it
+            let expectedExit: BlockExit = switch signal.indication {
+            case .block(let indicatedBlock):                    .block(indicatedBlock)
+            case .point(let indicatedPoint, let pointDirection): .point(PointSetting(point: indicatedPoint, direction: pointDirection))
+            }
+            if signal.location.blockExit[signal.direction] != expectedExit {
+                log.error("Signal \(signal.id) indication does not match block \(signal.location.id) \(signal.direction) exit")
+                return false
             }
         }
         
@@ -343,7 +344,7 @@ extension Layout {
                             return false
                         }
                         // The block must list this point leg as one of its exits, so the entry direction can be derived
-                        if entryDirection(into: connectionBlock, through: .point(PointSetting(point: point, direction: pointSetting))) == nil {
+                        if connectionBlock.entryDirection(through: .point(PointSetting(point: point, direction: pointSetting))) == nil {
                             log.error("Point \(point.id) connection \(pointSetting) exits to block \(connectionBlock.id), which has no exit to that point leg")
                             return false
                         }

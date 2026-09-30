@@ -88,10 +88,10 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - **Facing** – per train, the block direction the loco travels in when commanded DCC forward (`LayoutTrainController.trainFacing`, set with `setTrainFacing`). Defaults to forward, so on current layouts DCC direction always equals travel direction. Nothing changes facing yet; the next step towards reversing loops is per-path-item block directions, so facing can flip when a train crosses a flipping connection.
 
 ### Derived at `buildLayout()`
-- `blockRoutes` – every legal block→block transition per direction with the point settings required, found by `makeBlockRoutes()` walking point chains (facing → both legs, trailing → single). Each route also records `toDirection`, the travel direction on entering `toBlock`, derived by `entryDirection(into:through:)` from which of `toBlock`'s own exits the connection arrives through (arriving via its forward exit = travelling reverse). It differs from `direction` only across a loop closure; `BlockRoute.description` shows it (`-> dir`) only then.
+- `blockRoutes` – every legal block→block transition per direction with the point settings required, found by `makeBlockRoutes()` walking point chains (facing → both legs, trailing → single). Each route also records `toDirection`, the travel direction on entering `toBlock`, derived by `Block.entryDirection(through:)` from which of `toBlock`'s own exits the connection arrives through (arriving via its forward exit = travelling reverse). It differs from `direction` only across a loop closure; `BlockRoute.description` shows it (`-> dir`) only then.
 - `layoutGraph` – SwiftGraph directed graph of those transitions. Vertices are (block, travel direction) pairs named by `graphVertex()` (`"A+"` forward, `"A-"` reverse); each block route is an edge from `fromBlock`/`direction` to `toBlock`/`toDirection`.
 - `Layout.path(from:to:direction:)` – BFS shortest path from the start block in the given direction to the target block in either direction → `Path` (starting direction) of `PathItem`s (from, to, fromDirection, toDirection, role, pointSettings). The directions differ only across a loop closure.
-- `layoutIsValid()` – logs "Layout <name> is valid" on success; consistency checks (exits, point connections symmetric, every block→block link and point→block leg matched by exactly one exit on the receiving block, signals/sensors reference known items, no duplicate point settings). Failure is fatal at startup.
+- `layoutIsValid()` – logs "Layout <name> is valid" on success; consistency checks (exits, point connections symmetric, every block→block link and point→block leg matched by exactly one exit on the receiving block, each signal's indication equal to its block's exit in the signal's direction, signals/sensors reference known items, no duplicate point settings). Failure is fatal at startup.
 
 ### Routes
 - `Route` = id + `[Segment]`; `Segment` = `Path` + optional `WaitTime` (`fixed(s)`, `halt` 5 s, `station` 10 s, `terminus` 20 s). A direction change happens between segments.
@@ -125,10 +125,10 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 8. When no operators are active, `LayoutManager` schedules a **dormant** shutdown after 10 s (cancelled if a route starts): stop trains, signals off.
 
 ## 6. Signalling (`SignalCoordinator` / `SignalTrackState`)
-- Each signal finds its **next monitored block** following its indication and current point positions (points against → stop).
+- Each signal finds its **next monitored block** following its indication and current point positions (points against → stop), together with the travel direction in it of a train passing the signal (derived with `Block.entryDirection(through:)`; equal to the signal's direction except across a loop closure). Unmonitored blocks are passed through in their own travel direction.
 - Home aspect `go` only if the signal block is vacant/occupied in the signal's direction and the next block is vacant or reserved for the same train; otherwise `stop`.
 - `go` becomes `left/right` if the first point on the route is set to diverge (uses `branchOrientation`).
-- Distant aspect = home aspect of the next signal in the same direction in the next block.
+- Distant aspect = home aspect of the signal in the next block for the direction a train passing this signal travels in that block.
 - Only changed signals are sent to hardware (CBUS ASON2 with home+distant bytes) and MQTT.
 
 ## 7. Hardware / external interfaces
@@ -202,11 +202,11 @@ Route finding and train control originally assumed one layout-wide meaning of "d
 4d. `contiguousBlocks()` returns (block, direction) pairs, following direction changes across block→block links and stopping if a block repeats.
 5a. Direction locks store (train, direction) per block (`DirectionLock`) and are checked against the travel direction in each block; `reservePathItem` starts from the path item's `toDirection` and ignores the reserving train's own locks. Only differs from before if a train reverses while still holding locks ahead of it: those locks keep their original direction, where previously they took the train's new direction.
 5b. `BlockRuntimeState` carries the train's travel direction in each block, and `snapshot.travelDirection(in:)` reads it from there instead of the train's single direction (the snapshot no longer holds train directions). When a new segment reverses the train, `RouteOperator.processNextFrontPathItem` calls `reverseTravelDirection(of:)` to flip the direction in every block the train holds, matching the old behaviour where all its blocks followed the train's direction.
+6. Signals: `Signal.nextBlock` returns (block, direction) and the next-block direction checks in `signalIndication`, the distant-signal lookup and the diverging-route walk through unmonitored blocks use it instead of the signal's direction. `entryDirection` moved from `Layout` to `Block` so signal code can use it. `layoutIsValid()` checks each signal's indication matches its block exit (all Cellar signals do).
 
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).
 
 ### Remaining steps (each a separate, behaviour-preserving commit where possible)
-6. **Signals**: `nextMonitoredBlock` uses the travel direction in the unmonitored block, not the signal's; the distant-signal lookup in `SignalCoordinator` uses the direction in the next block.
 7. **RouteOperator**: sensor start/end checks, `setTrainSpeed` (block exit and end signal) and stop-sensor selection use the direction in the relevant block; update facing when the front crosses a path item whose `fromDirection != toDirection`; a segment boundary still means "reverse the train" (flip DCC direction and the travel direction in the current block).
 8. **Test layout**: add a small `TestLoop` layout with a reversing loop and run a turn-round route using the console sensor commands (`sn<addr>` / `ss<addr>`).
 

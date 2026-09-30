@@ -21,11 +21,11 @@ actor SignalCoordinator {
                 homeState[signal] = divergingDirection
             }
 
-            // Find a signal in the next block indicating the same direction
+            // Find a signal in the next block for the direction a train passing this signal travels in it
             // if it is set to red update the current signal distant state
-            let nextBlock = signal.nextBlock(snapshot: snapshot)
-            if let signalForBlock = snapshot.allSignals.first(where: {
-                $0.location == nextBlock && $0.direction == signal.direction
+            if let nextBlock = signal.nextBlock(snapshot: snapshot),
+               let signalForBlock = snapshot.allSignals.first(where: {
+                $0.location == nextBlock.block && $0.direction == nextBlock.direction
             }) {
                 distantState[signal] = homeState[signalForBlock]
             }
@@ -53,8 +53,9 @@ actor SignalCoordinator {
         switch signal.indication {
         case .block(let block):
             // Unmonitored blocks are passed through, as for the next block logic
+            let entryDirection = block.entryDirection(through: .block(signal.location)) ?? signal.direction
             return block.isUnMonitored
-                ? divergingDirection(afterBlock: block, direction: signal.direction, snapshot: snapshot)
+                ? divergingDirection(afterBlock: block, direction: entryDirection, snapshot: snapshot)
                 : nil
         case .point(let point, let entering):
             return divergingDirection(afterPoint: point, entering: entering, direction: signal.direction, snapshot: snapshot)
@@ -62,7 +63,8 @@ actor SignalCoordinator {
     }
     
     // Follow the active path through the points until the next monitored block is reached, returning
-    // the branch direction of the first point that is set to diverge, or nil if there is none
+    // the branch direction of the first point that is set to diverge, or nil if there is none.
+    // `direction` is the travel direction in the block before the point.
     private static func divergingDirection(afterPoint point: Point, entering: PointDirection, direction: BlockDirection, snapshot: LayoutTrackSnapshot) -> SignalState? {
         guard let currentDirection = snapshot.pointState(point)?.direction else { return nil }
         
@@ -81,8 +83,9 @@ actor SignalCoordinator {
         switch point.connections[exitDirection] {
         case .block(let block):
             // Unmonitored blocks are passed through, as for the next block logic
+            let entryDirection = block.entryDirection(through: .point(PointSetting(point: point, direction: exitDirection))) ?? direction
             return block.isUnMonitored
-                ? divergingDirection(afterBlock: block, direction: direction, snapshot: snapshot)
+                ? divergingDirection(afterBlock: block, direction: entryDirection, snapshot: snapshot)
                 : nil
         case .point(let nextPoint, let nextEntering):
             return divergingDirection(afterPoint: nextPoint, entering: nextEntering, direction: direction, snapshot: snapshot)
@@ -91,7 +94,7 @@ actor SignalCoordinator {
         }
     }
     
-    // Continue the walk through an unmonitored block to whatever follows it
+    // Continue the walk through an unmonitored block to whatever follows it (`direction` is the travel direction in the block)
     private static func divergingDirection(afterBlock block: Block, direction: BlockDirection, snapshot: LayoutTrackSnapshot) -> SignalState? {
         switch block.blockExit[direction] {
         case .point(let pointSetting)?:
