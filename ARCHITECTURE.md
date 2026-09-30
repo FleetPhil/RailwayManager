@@ -151,7 +151,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - None currently known.
 
 **Incomplete / TODO**
-- `stopDelay` and timer stops hard-code `.forward` direction; speed-change delay should depend on block length.
+- Speed-change delay should depend on block length.
 - `stoppingAtSensor` and `waiting` train states are handled but never set; `didEndTimer`, buttons 1 and 5 unused.
 - `processVacatedBlock` has an unfinished "Free any" comment.
 - Lights (`Light`, `Block.associatedLights`, `CBUSManager.setLight/setClocks/setLED`) are stubs.

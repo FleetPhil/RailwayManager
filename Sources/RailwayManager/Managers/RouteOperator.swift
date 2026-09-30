@@ -306,8 +306,7 @@ actor RouteOperator {
         // Check if we should stop at this sensor for a timer
         if case .stoppingForTimer(let stopSensor, let timer) = try await trainController.trainState(train),
                   sensor == stopSensor {
-            // TODO: finer control depending on direction
-            let stopDelay = stopDelay(sensor: stopSensor, direction: .forward)
+            let stopDelay = stopDelay(sensor: stopSensor)
             if stopDelay > 0 {
                 try await Task.sleep(for: .seconds(stopDelay))
             }
@@ -325,9 +324,8 @@ actor RouteOperator {
     
     // Cleanup at end of route after last sensor has been set
     private func endRoute(atSensor: Sensor) async throws {
-        // TODO: finer control depending on direction
         // TODO: add stopping event after timer instead of sleep
-        let stopDelay = stopDelay(sensor: atSensor, direction: .forward)
+        let stopDelay = stopDelay(sensor: atSensor)
         
         // Wait for the delay before ending the route
         try await Task.sleep(for: .seconds(stopDelay))
@@ -358,8 +356,9 @@ actor RouteOperator {
         await LayoutEventHub.shared.publish(.didEndRoute(train))
     }
     
-    // Return the delay before stopping for the train at this sensor and direction
-    private func stopDelay(sensor: Sensor, direction: BlockDirection) -> TimeInterval {
+    // Return the delay before stopping for the train at this sensor
+    // (the same in either direction: a station stop is half a train length past the station sensor)
+    private func stopDelay(sensor: Sensor) -> TimeInterval {
         switch sensor.location {
         case .station:
             // We need to stop after half a train length
