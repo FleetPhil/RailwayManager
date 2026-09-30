@@ -24,11 +24,13 @@ class Layout: @unchecked Sendable  {
     struct BlockRoute: CustomStringConvertible {
         var fromBlock: Block
         var toBlock: Block
-        var direction: BlockDirection
+        var direction: BlockDirection           // Travel direction in fromBlock
+        var toDirection: BlockDirection         // Travel direction on entering toBlock (differs only across a loop closure)
         var pointSettings: [PointSetting]
-        
+
         var description: String {
-            "\(fromBlock)-\(toBlock) \(direction): \(pointSettings.map({ $0 }))"
+            let flip = toDirection == direction ? "" : " -> \(toDirection)"
+            return "\(fromBlock)-\(toBlock) \(direction)\(flip): \(pointSettings.map({ $0 }))"
         }
     }
     // The routes from the layout graph calculated at init

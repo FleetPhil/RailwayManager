@@ -61,6 +61,15 @@ extension Layout {
         }
     }
     
+    // Travel direction on entering `block` through `exit`, the connection as it appears in the block's own exits.
+    // Arriving through the block's forward exit means travelling reverse in it, and vice versa.
+    // Nil if the block has no matching exit, or both its exits match (ambiguous).
+    func entryDirection(into block: Block, through exit: BlockExit) -> BlockDirection? {
+        let matching = BlockDirection.allCases.filter({ block.blockExit[$0] == exit })
+        guard matching.count == 1, let exitDirection = matching.first else { return nil }
+        return exitDirection.oppositeDirection
+    }
+    
     // The layout graph builder.
     // Vertices are blocks, Edges are direct connections, single points or groups of points
     
@@ -83,16 +92,20 @@ extension Layout {
                 case .unknown, .noExit:
                     break
                 case .block(let toBlock):
-                    routes.append(BlockRoute(fromBlock: block, toBlock: toBlock,
-                                             direction: direction, pointSettings: []))
+                    // An unmatched link is reported by layoutIsValid(); keep the direction meanwhile
+                    let toDirection = entryDirection(into: toBlock, through: .block(block)) ?? direction
+                    routes.append(BlockRoute(fromBlock: block, toBlock: toBlock, direction: direction,
+                                             toDirection: toDirection, pointSettings: []))
                 case .point(let pointSetting):
                     let paths = traversePointChain(entering: pointSetting.point,
                                                    from: pointSetting.direction,
                                                    accumulated: [],
                                                    visited: [])
-                    for (toBlock, settings) in paths {
-                        routes.append(BlockRoute(fromBlock: block, toBlock: toBlock,
-                                                 direction: direction, pointSettings: settings))
+                    for (toBlock, settings, exitLeg) in paths {
+                        // An unmatched link is reported by layoutIsValid(); keep the direction meanwhile
+                        let toDirection = entryDirection(into: toBlock, through: .point(exitLeg)) ?? direction
+                        routes.append(BlockRoute(fromBlock: block, toBlock: toBlock, direction: direction,
+                                                 toDirection: toDirection, pointSettings: settings))
                     }
                 }
             }
@@ -101,37 +114,38 @@ extension Layout {
         return routes
     }
 
-    // Returns all reachable (block, [PointSetting]) pairs from the given point entry.
-    // `from` is the leg of the point we enter from.
+    // Returns all reachable (block, [PointSetting], exit leg) from the given point entry.
+    // `from` is the leg of the point we enter from; the exit leg is the point and leg that connects to the block.
     // Facing entry (.single) branches into both split options; trailing entry exits to .single.
     private func traversePointChain(entering point: Point, from entryDirection: PointDirection,
-                                    accumulated: [PointSetting], visited: Set<Int>) -> [(Block, [PointSetting])] {
+                                    accumulated: [PointSetting], visited: Set<Int>) -> [(Block, [PointSetting], PointSetting)] {
         guard !visited.contains(point.id) else { return [] }
         var visited = visited
         visited.insert(point.id)
 
-        var exits: [(PointDirection, PointConnection)] = []
+        // (point setting, leg we leave by, connection from that leg)
+        var exits: [(PointDirection, PointDirection, PointConnection)] = []
 
         if entryDirection == .single {
             // Facing movement — enumerate both branch options
             for branch in [PointDirection.splitStraight, PointDirection.splitBranch] {
                 if let connection = point.connections[branch] {
-                    exits.append((branch, connection))
+                    exits.append((branch, branch, connection))
                 }
             }
         } else {
             // Trailing movement — exit forced to .single
             if let connection = point.connections[.single] {
-                exits.append((entryDirection, connection))
+                exits.append((entryDirection, .single, connection))
             }
         }
 
-        var results: [(Block, [PointSetting])] = []
-        for (settingDirection, connection) in exits {
+        var results: [(Block, [PointSetting], PointSetting)] = []
+        for (settingDirection, exitLeg, connection) in exits {
             let settings = accumulated + [PointSetting(point: point, direction: settingDirection)]
             switch connection {
             case .block(let nextBlock):
-                results.append((nextBlock, settings))
+                results.append((nextBlock, settings, PointSetting(point: point, direction: exitLeg)))
             case .point(let nextPoint, let nextEntryDirection):
                 results += traversePointChain(entering: nextPoint, from: nextEntryDirection,
                                               accumulated: settings, visited: visited)
@@ -193,6 +207,11 @@ extension Layout {
                 case .block(let exitBlock):
                     if blocks.contains(exitBlock) == false {
                         log.error("Block \(block.id) exits to unknown block \(exitBlock.id)")
+                        return false
+                    }
+                    // Block -> block links must be defined on both blocks, so the entry direction can be derived
+                    if entryDirection(into: exitBlock, through: .block(block)) == nil {
+                        log.error("Block \(block.id) exits to block \(exitBlock.id), which needs exactly one exit back to \(block.id)")
                         return false
                     }
                 case .point(let pointSetting):
@@ -298,6 +317,11 @@ extension Layout {
                     case .block(let connectionBlock):
                         if blocks.contains(connectionBlock) == false {
                             log.error("Point \(point.id) connection \(pointSetting) exits to unknown block \(connectionBlock.id)")
+                            return false
+                        }
+                        // The block must list this point leg as one of its exits, so the entry direction can be derived
+                        if entryDirection(into: connectionBlock, through: .point(PointSetting(point: point, direction: pointSetting))) == nil {
+                            log.error("Point \(point.id) connection \(pointSetting) exits to block \(connectionBlock.id), which has no exit to that point leg")
                             return false
                         }
                     case .point(let connectionPoint, let connectionPointDirection):
