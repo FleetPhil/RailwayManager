@@ -41,6 +41,10 @@ struct Route: CustomStringConvertible, Sendable {
         return "\(self.id)"
     }
     
+    nonisolated var path: String {
+        return "\(id): \(segments.map({ $0.path }))"
+    }
+    
 
 }
 

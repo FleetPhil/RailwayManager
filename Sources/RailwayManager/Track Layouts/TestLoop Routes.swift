@@ -21,6 +21,29 @@ extension RailwayManager {
                                     toBlock: layout.block("S"),
                                     direction: .reverse)
         let segment2 = Segment(path: path2, waitTime: .station)
-        return Route(id: 1, segments: [segment1, segment2])
+        
+        let route = Route(id: 1, segments: [segment1, segment2])
+        
+        log.verbose("Route is \(route.path)")
+        
+        return route
     }
+
+    static func testLoop2Route(layout: Layout) throws -> Route {
+        let path1 = try layout.path(fromBlock: layout.block("S1"),
+                                    toBlock: layout.block("S2"),
+                                    direction: .forward)
+        let segment1 = Segment(path: path1, waitTime: .halt)
+        let path2 = try layout.path(fromBlock: layout.block("S2"),
+                                    toBlock: layout.block("S1"),
+                                    direction: .forward)
+        let segment2 = Segment(path: path2, waitTime: .station)
+
+        let route = Route(id: 1, segments: [segment1, segment2])
+        
+        log.verbose("Route is \(route.path)")
+        
+        return route
+    }
+
 }

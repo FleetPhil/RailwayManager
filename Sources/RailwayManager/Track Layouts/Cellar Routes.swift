@@ -14,6 +14,7 @@ extension RailwayManager {
         switch layout {
         case is Cellar:     return try cellarRoute(layout: layout)
         case is TestLoop:   return try testLoopRoute(layout: layout)
+        case is TestLoop2:  return try testLoop2Route(layout: layout)
         default:            return nil
         }
     }
@@ -29,6 +30,8 @@ extension RailwayManager {
                                     direction: .reverse)
         let segment2 = Segment(path: path12, waitTime: .station)
         let route1 = Route(id: 1, segments: [segment1, segment2])
+        
+        log.info("Route is \(route1)")
         
         return route1
     }

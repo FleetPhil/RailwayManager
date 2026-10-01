@@ -34,11 +34,13 @@ enum LogLevel: String, CaseIterable, ExpressibleByArgument {
 enum LayoutName: String, CaseIterable, ExpressibleByArgument {
     case cellar = "Cellar"
     case testLoop = "TestLoop"
+    case testLoop2 = "TestLoop2"
     
     func makeLayout() -> Layout {
         switch self {
         case .cellar:       Cellar()
         case .testLoop:     TestLoop()
+        case .testLoop2:    TestLoop2()
         }
     }
 }
@@ -177,9 +179,13 @@ struct RailwayManager: ParsableCommand {
     }
     
     static func createLayoutManager(layout: Layout) async throws -> LayoutManager {
-        guard layout.layoutIsValid() else {
-            fatalError("Layout is invalid — check logs for details")
+        do {
+            try layout.layoutIsValid()
+        } catch {
+            print(error)
+            throw TrainError.layoutError("Unable to initialise layout")
         }
+
         return try await LayoutManager(layout: layout)
     }
     
@@ -238,6 +244,9 @@ struct RailwayManager: ParsableCommand {
         }
         
         let route = Route(id: routeParams.routeID, segments: segments, initialDCCDirection: routeParams.initialDCCDirection)
+        
+        log.verbose("Route is: \(route.path)")
+        
         try await layoutManager.runRoute(route: route, train: train)
     }
     

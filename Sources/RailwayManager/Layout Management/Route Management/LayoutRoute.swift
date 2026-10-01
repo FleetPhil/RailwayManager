@@ -44,7 +44,7 @@ extension Layout {
             index += 1
         }
         
-        log.verbose("Path is \(pathItems)")
+//        log.verbose("Path is \(pathItems)")
         return Path(direction: direction, pathItems: pathItems)
     }
     
@@ -212,7 +212,7 @@ extension Layout {
 extension Layout {
     
     // Check for valid layout
-    func layoutIsValid() -> Bool {
+    func layoutIsValid() throws {
         
         // Check block exits
         for block in self.blocks {
@@ -220,61 +220,52 @@ extension Layout {
                 switch blockExit {
                 case .block(let exitBlock):
                     if blocks.contains(exitBlock) == false {
-                        log.error("Block \(block.id) exits to unknown block \(exitBlock.id)")
-                        return false
+                        throw TrainError.layoutError("Block \(block.id) exits to unknown block \(exitBlock.id)")
                     }
                     // Block -> block links must be defined on both blocks, so the entry direction can be derived
                     if exitBlock.entryDirection(through: .block(block)) == nil {
-                        log.error("Block \(block.id) exits to block \(exitBlock.id), which needs exactly one exit back to \(block.id)")
-                        return false
+                        throw TrainError.layoutError("Block \(block.id) exits to block \(exitBlock.id), which needs exactly one exit back to \(block.id)")
                     }
                 case .point(let pointSetting):
                     guard let pointConnection = pointSetting.point.connections[pointSetting.direction] else {
-                        log.error("Block \(block.id) exit to point \(pointSetting.point) not consistent with point connection")
-                        return false
+                        throw TrainError.layoutError("Block \(block.id) exit to point \(pointSetting.point) not consistent with point connection")
                     }
                     switch pointConnection {
                     case .block(let connectionBlock):
                         if connectionBlock != block {
-                            log.error("Block \(block.id) exit to point \(pointSetting.point) but point setting indicates block \(connectionBlock)")
-                            return false
+                            throw TrainError.layoutError("Block \(block.id) exit to point \(pointSetting.point) but point setting indicates block \(connectionBlock)")
                         }
                     case .point:
-                        log.error("Block \(block.id) exit to point \(pointSetting.point) but point setting points to another point")
-                        return false
+                        throw TrainError.layoutError("Block \(block.id) exit to point \(pointSetting.point) but point setting points to another point")
                     }
                     
                 case .noExit:
                     break
                     
                 case .unknown:
-                    log.error("Block \(block.id) has undefined exits")
-                    return false
+                    throw TrainError.layoutError("Block \(block.id) has undefined exits")
                 }
             }
             
             for light in block.associatedLights {
                 if lights.contains(light) == false {
-                    log.error("Block \(block.id) has unknown associated light \(light.id)")
+                    throw TrainError.layoutError("Block \(block.id) has unknown associated light \(light.id)")
                 }
             }
         }
         
         for signal in self.signals {
             if blocks.contains(signal.location) == false {
-                log.error("Signal \(signal.id) located in unknown block \(signal.location.id)")
-                return false
+                throw TrainError.layoutError("Signal \(signal.id) located in unknown block \(signal.location.id)")
             }
             switch signal.indication {
             case .block(let indicatedBlock):
                 if blocks.contains(indicatedBlock) == false {
-                    log.error("Signal \(signal.id) indicates unknown block \(indicatedBlock.id)")
-                    return false
+                    throw TrainError.layoutError("Signal \(signal.id) indicates unknown block \(indicatedBlock.id)")
                 }
             case .point(let indicatedPoint, _):
                 if points.contains(indicatedPoint) == false {
-                    log.error("Signal \(signal.id) indicates unknown point \(indicatedPoint.id)")
-                    return false
+                    throw TrainError.layoutError("Signal \(signal.id) indicates unknown point \(indicatedPoint.id)")
                 }
             }
             // The indication must be the location block's exit in the signal's direction,
@@ -284,8 +275,7 @@ extension Layout {
             case .point(let indicatedPoint, let pointDirection): .point(PointSetting(point: indicatedPoint, direction: pointDirection))
             }
             if signal.location.blockExit[signal.direction] != expectedExit {
-                log.error("Signal \(signal.id) indication does not match block \(signal.location.id) \(signal.direction) exit")
-                return false
+                throw TrainError.layoutError("Signal \(signal.id) indication does not match block \(signal.location.id) \(signal.direction) exit")
             }
         }
         
@@ -296,15 +286,13 @@ extension Layout {
                     .station(let sensorBlock),
                     .end(let sensorBlock, _):
                 if blocks.contains(sensorBlock) == false {
-                    log.error("Sensor \(sensor.id) located in unknown block \(sensorBlock.id)")
-                    return false
+                    throw TrainError.layoutError("Sensor \(sensor.id) located in unknown block \(sensorBlock.id)")
                 }
             }
             
             for sensorSignal in sensor.signals.values {
                 if signals.contains(sensorSignal) == false {
-                    log.error("Sensor \(sensor.id) located with unknown signal \(sensorSignal.id)")
-                    return false
+                    throw TrainError.layoutError("Sensor \(sensor.id) located with unknown signal \(sensorSignal.id)")
                 }
             }
         }
@@ -328,9 +316,8 @@ extension Layout {
             let duplicated = Dictionary(mappedItems, uniquingKeysWith: +).filter({ $0.value > 1 })
             if duplicated.isEmpty == false {
                 for duplicate in duplicated {
-                    log.error("Duplicate block exit: \(duplicate.key)")
+                    throw TrainError.layoutError("Duplicate block exit: \(duplicate.key)")
                 }
-                return false
             }
         }
 
@@ -340,31 +327,25 @@ extension Layout {
                     switch pointConnection {
                     case .block(let connectionBlock):
                         if blocks.contains(connectionBlock) == false {
-                            log.error("Point \(point.id) connection \(pointSetting) exits to unknown block \(connectionBlock.id)")
-                            return false
+                            throw TrainError.layoutError("Point \(point.id) connection \(pointSetting) exits to unknown block \(connectionBlock.id)")
                         }
                         // The block must list this point leg as one of its exits, so the entry direction can be derived
                         if connectionBlock.entryDirection(through: .point(PointSetting(point: point, direction: pointSetting))) == nil {
-                            log.error("Point \(point.id) connection \(pointSetting) exits to block \(connectionBlock.id), which has no exit to that point leg")
-                            return false
+                            throw TrainError.layoutError("Point \(point.id) connection \(pointSetting) exits to block \(connectionBlock.id), which has no exit to that point leg")
                         }
                     case .point(let connectionPoint, let connectionPointDirection):
                         let thisPointConnection: PointConnection = .point(point, pointSetting)
                         
                         guard let connectedPointConnection = connectionPoint.connections[connectionPointDirection] else {
-                            log.error("No connection for \(connectionPoint), \(connectionPointDirection)")
-                            return false
+                            throw TrainError.layoutError("No connection for \(connectionPoint), \(connectionPointDirection)")
                         }
                         
                         if connectedPointConnection != thisPointConnection {
-                            log.error("Point \(point.id) \(pointSetting) does not match connected point \(connectionPoint.id)")
-                            log.error("Expected \(thisPointConnection), got \(connectedPointConnection)")
-                            return false
+                            throw TrainError.layoutError("Point \(point.id) \(pointSetting) does not match connected point \(connectionPoint.id): Expected \(thisPointConnection), got \(connectedPointConnection)")
                         }
                     }
                 } else {
-                    log.error("Point \(point.id) connection not defined for \(pointSetting)")
-                    return false
+                    throw TrainError.layoutError("Point \(point.id) connection not defined for \(pointSetting)")
                 }
             }
         }
@@ -376,9 +357,8 @@ extension Layout {
             
             if duplicatedPoints.isEmpty == false {
                 for point in duplicatedPoints.keys {
-                    log.error("Block route \(blockRoute.fromBlock)-\(blockRoute.toBlock) (\(blockRoute.direction)) sets point \(point.id) more than once")
+                    throw TrainError.layoutError("Block route \(blockRoute.fromBlock)-\(blockRoute.toBlock) (\(blockRoute.direction)) sets point \(point.id) more than once")
                 }
-                return false
             }
         }
         
@@ -397,7 +377,6 @@ extension Layout {
         }
         
         log.info("Layout \(type(of: self)) is valid")
-        return true
     }
 }
 

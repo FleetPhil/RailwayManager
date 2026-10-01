@@ -26,6 +26,7 @@ enum TrainError: Error, Equatable {
     case noDCCSession(Int)
     case trainAlreadyActive(Int)
     case unexpectedSensorEvent(String)
+    case layoutError(String)
     
     var isFatal: Bool {
         switch self {
@@ -47,6 +48,7 @@ enum TrainError: Error, Equatable {
         case .noDCCSession:                 true
         case .trainAlreadyActive:           false
         case .unexpectedSensorEvent:        false
+        case .layoutError:                  false
         }
     }
 }
