@@ -33,6 +33,15 @@ actor MQTTManager: Sendable {
         var additionalInformation: String?
     }
     
+    // Payload for the result topic: the outcome of a route request, the route and train it concerns
+    // and the error text (empty on success)
+    struct RouteResult: Codable {
+        var success: Bool
+        var routeID: Int?
+        var trainID: Int?
+        var message: String
+    }
+    
     private var client: MQTTClient? = nil
     private var mqttState: MQTTState = .idle
     
@@ -40,6 +49,7 @@ actor MQTTManager: Sendable {
     private let stateTopic = "/state"
     private let layoutTopic = "/topology"
     private let routeTopic = "/route"
+    private let resultTopic = "/result"
 
     private init() {
         // Broker location is set from the command line options (or their env/default values)
@@ -198,6 +208,33 @@ actor MQTTManager: Sendable {
         } catch {
             handleJSONError(error)
             throw TrainError.applicationError("MQTT publish failed for block state")
+        }
+    }
+    
+    // Publish a successful route request result (empty message) on the result topic
+    func sendRouteSuccess(routeID: Int? = nil, trainID: Int? = nil) async throws {
+        try await sendRouteResult(RouteResult(success: true, routeID: routeID, trainID: trainID, message: ""))
+    }
+    
+    // Publish a failed route request result with the error message on the result topic
+    func sendRouteError(_ message: String, routeID: Int? = nil, trainID: Int? = nil) async throws {
+        try await sendRouteResult(RouteResult(success: false, routeID: routeID, trainID: trainID, message: message))
+    }
+    
+    private func sendRouteResult(_ result: RouteResult) async throws {
+        do {
+            let payload = try String(decoding: JSONEncoder().encode(result), as: UTF8.self)
+            
+            if GlobalOptions.noMQTT {
+                log.debug("Payload: \(payload)")
+            } else {
+                try await client?.publish(to: topic + resultTopic,
+                                          payload: ByteBufferAllocator().buffer(string: payload),
+                                          qos: .atLeastOnce)
+            }
+        } catch {
+            handleJSONError(error)
+            throw TrainError.applicationError("MQTT publish failed for route result")
         }
     }
     

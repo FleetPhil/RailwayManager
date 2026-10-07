@@ -206,14 +206,30 @@ struct RailwayManager: ParsableCommand {
                         case .endManager:
                             await LayoutEventHub.shared.publish(.didPushButton(3))  // End manager
                         }
+                        await publishRouteResult(for: routeParams, error: nil)
                         
                     } catch {
                         log.error("Route request \(routeParams.routeID) rejected: \(error)")
+                        await publishRouteResult(for: routeParams, error: error)
                     }
                 }
             } catch {
                 log.error("Route request monitoring failed: \(error)")
             }
+        }
+    }
+    
+    // Reply to a route request on the result topic: success, or the error that rejected it.
+    // A publish failure is only logged.
+    private static func publishRouteResult(for routeParams: MQTTManager.RouteParams, error: Error?) async {
+        do {
+            if let error {
+                try await MQTTManager.shared.sendRouteError("\(error)", routeID: routeParams.routeID, trainID: routeParams.trainID)
+            } else {
+                try await MQTTManager.shared.sendRouteSuccess(routeID: routeParams.routeID, trainID: routeParams.trainID)
+            }
+        } catch {
+            log.error("Failed to publish result for route request \(routeParams.routeID): \(error)")
         }
     }
     

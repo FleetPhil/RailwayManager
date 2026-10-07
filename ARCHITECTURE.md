@@ -59,7 +59,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
                                                 │                 ▼
                                              CBUSManager ◄── Signal/Point hardware
                                                 │
-                                        MQTTManager (telemetry, /railway/state, /railway/topology)
+                                        MQTTManager (telemetry, /railway/state, /railway/topology, /railway/result)
 ```
 
 ### Concurrency model
@@ -135,12 +135,12 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - **CBUS** over CANUSB4 (auto-discovered by USB VID 0x04D8 / PID 0xF80C on macOS via IOKit, Linux via sysfs), 115200 baud, ASCII GridConnect frames `:S6FC0N<op><data>;`.
   - Out: DSPD (speed), DFNON/DFNOF (functions), RLOC/GLOC/KLOC/DKEEP (sessions), STOP, ARST, RDCC3 (DCC accessory packet for points), ASON2/ASOF (signals).
   - In: ASON1/ASOF1 (sensor set/unset with orientation), PLOC, ERR, STAT, ASOF3 (sensor statistics).
-- **MQTT** topics: `railway/state` (JSON `LayoutItemState`), `railway/topology` (block end-signals, signal locations, points), `railway/route` (incoming `RouteParams`). Default broker `192.168.86.56:1883` (env `MQTT_HOST`/`MQTT_PORT` or CLI).
+- **MQTT** topics: `railway/state` (JSON `LayoutItemState`), `railway/topology` (block end-signals, signal locations, points), `railway/route` (incoming `RouteParams`), `railway/result` (one reply per route request: JSON `RouteResult` `{success, routeID, trainID, message}`, message empty on success; sent by `sendRouteSuccess` / `sendRouteError`). Default broker `192.168.86.56:1883` (env `MQTT_HOST`/`MQTT_PORT` or CLI).
 - **Console** (macOS): `sn<addr>` / `ss<addr>` simulate a north/south sensor pulse, `x` = shutdown (button 3), `st` = print status, `dp` = write every block route and every block-to-block path (both directions) to a timestamped file in the home directory (`Layout.topologyDump()`), for diffing topology changes.
 - **LEDs**: blue = dormant, green = running (slow flash = ending), red = error. No-op on macOS; elsewhere driven via `CBUSManager.setLED` (currently an empty stub).
 
 ## 8. Error handling
-- `TrainError` cases each flagged `isFatal`. In `runManager` a fatal error sets layout `.error` and `fatalError`s; route requests from MQTT that fail are logged and skipped.
+- `TrainError` cases each flagged `isFatal`, with a readable `description` used in logs and error messages. In `runManager` a fatal error sets layout `.error` and `fatalError`s; route requests from MQTT that fail are logged and skipped. Every route request (run route, stop all trains, end manager) gets one reply on `railway/result`: success with an empty message, or failure with the error text, plus the route and train IDs (a publish failure is only logged).
 - Any error inside `processEvent` triggers a CBUS emergency stop. If that fails (CBUS unreachable) the error is logged and the layout enters `.error` (red LED, individual stops attempted) instead of crashing.
 - Delayed speed commands are held per DCC session in `CBUSManager.pendingSpeedCommands`. Any newer speed/stop for the session, a session release, or an emergency stop cancels the pending one, so a delayed speed can never override a later stop.
 - Telemetry failures are swallowed (`try?`) so they never fail a state change.
