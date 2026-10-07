@@ -8,7 +8,7 @@
 import Foundation
 
 enum TrainRuntimeState: Equatable, CustomStringConvertible {
-    case idle
+    case idle(Block?)                       // Not running a route, in the block (nil if not known)
     case running(PathItem)                  // Normal - executing path item
     case waiting                            // Stop commanded in transition or waiting before move
     // Stopping at sensor waiting for block or for other transition item before moving to Block
@@ -27,10 +27,23 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
         }
     }
     
+    // The block the train was last known to be in (the front of the train), or nil
+    var lastKnownBlock: Block? {
+        switch self {
+        case .idle(let block):                          block
+        case .running(let item):                        item.fromBlock
+        case .stoppedForResource(_, let item):          item.fromBlock
+        case .stoppingAtSensor(let sensor, _),
+             .stoppingForTimer(let sensor, _),
+             .stoppedAtSensor(let sensor):              sensor.block
+        case .waiting, .stoppingForResource:            nil
+        }
+    }
+    
     var description: String {
         switch self {
-        case .idle:
-            "Idle"
+        case .idle(let block):
+            block.map({ "Idle (\($0))" }) ?? "Idle"
         case .running(let item):
             "Running (\(item))"
         case .waiting:

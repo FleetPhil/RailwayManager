@@ -115,7 +115,7 @@ actor RouteOperator {
         if let initialDCCDirection = route.initialDCCDirection {
             await trainController.setTrainFacing(train, dccDirection: initialDCCDirection, travelling: route.initialDirection)
         }
-        try await stateService.setStateForTrain(train, state: .idle)
+        try await stateService.setStateForTrain(train, state: .idle(route.startBlock))
         try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, route.initialDirection))
         
         // Will be incremented at route start
@@ -337,7 +337,7 @@ actor RouteOperator {
         try await Task.sleep(for: .seconds(stopDelay))
 
         try await stopTrain()
-        try await setTrainState(.idle)
+        try await setTrainState(.idle(atSensor.location.block))
         
         // Free any resources owned by this train except the block with the sensor that it has stopped at
         // Setting the block state will trigger an event to free associated points

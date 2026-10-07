@@ -105,7 +105,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Signals: cached `(home, distant)`; recomputed from a `LayoutTrackSnapshot`.
 
 ### Train runtime (`LayoutTrainController`)
-- `TrainRuntimeState`: `idle, running(item), waiting, stoppingForResource, stoppedForResource, stoppingAtSensor, stoppingForTimer, stoppedAtSensor`.
+- `TrainRuntimeState`: `idle(Block?)` (the block the train is in, nil if not known), `running(item), waiting, stoppingForResource, stoppedForResource, stoppingAtSensor, stoppingForTimer, stoppedAtSensor`. `lastKnownBlock` gives the train's front block from any state (from the path item or sensor; nil for `waiting`/`stoppingForResource`). Routes set `idle` with the start block (`resetRoute`) or the stop sensor's block (`endRoute`); `activateSession` and `stopAllTrains` keep the last known block, so it survives a shutdown, an error or a stop-all reset (when block states are reset to vacant but the train has not moved). MQTT train state shows `Idle (B)`, or `Idle` if the block is not known.
 - DCC sessions: `requestSession` (RLOC) → PLOC arrives as `didGetSession` → `activateSession`; ERR "session in use" → `sessionAllocated` → steal (GLOC). Commands wait up to 5 s for a session, then throw `noDCCSession`.
 - Speeds: `TrainSpeed` `stop/slow/normal/fast/manual` mapped to power per train (`Trains.swift`), plus speed in cm/s used for station stop timing.
 
@@ -121,7 +121,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
    - rear at start of `toBlock` → previous block vacant, direction lock released, advance **rear** index.
 5. `didFreeResource` → every operator waiting on that resource retries (`requestPathItem`).
 6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (exit and end signal for the train's travel direction in that block) (stop→slow, diverging→normal, distant stop→normal, else fast; no signal at the exit→normal). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `requestPathItem` stops the train and returns without touching speed or route state.
-7. Stops: last path item of a segment with a `waitTime` stops at the block's station sensor (delay = half train length / speed) or its end sensor. Last segment → `.ending` → `endRoute`: stop, idle, free all other blocks held by the train, wait, light off, release session, `.ended`, publish `didEndRoute`.
+7. Stops: last path item of a segment with a `waitTime` stops at the block's station sensor (delay = half train length / speed) or its end sensor. Last segment → `.ending` → `endRoute`: stop, idle, free all other blocks held by the train (the train is idle in the stop sensor's block), wait, light off, release session, `.ended`, publish `didEndRoute`.
 8. When no operators are active, `LayoutManager` schedules a **dormant** shutdown after 10 s (cancelled if a route starts): stop trains, signals off.
 
 ## 6. Signalling (`SignalCoordinator` / `SignalTrackState`)

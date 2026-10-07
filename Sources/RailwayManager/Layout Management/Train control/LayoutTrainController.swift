@@ -22,7 +22,8 @@ actor LayoutTrainController {
         
         log.debug("DCC: Session active and train \(train) idle for address \(address)")
         
-        trainStates[train] = .idle
+        // Keep the block the train was last known to be in (normally already idle in it)
+        trainStates[train] = .idle(trainStates[train]?.lastKnownBlock)
     }
     
     func stealSession(address: Int) async throws  {
@@ -210,7 +211,7 @@ actor LayoutTrainController {
         for activeTrain in activeTrains {
             do {
                 try await setSpeedforTrain(activeTrain, speed: .stop)
-                try await setTrainState(activeTrain, state: .idle)
+                try await setTrainState(activeTrain, state: .idle(trainStates[activeTrain]?.lastKnownBlock))
             } catch {
                 stopFailed = true
                 log.error("Failed to stop train \(activeTrain): \(error)")
