@@ -57,7 +57,7 @@
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "-layout TestLoop2"
+            argument = "-layout Xmas26"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument

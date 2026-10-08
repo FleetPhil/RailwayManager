@@ -55,7 +55,12 @@ class Layout: @unchecked Sendable  {
     }
     
     func block(_ id: String) -> Block {
-        return blocks.first(where: { $0.id == id })!
+        if let block = blocks.first(where: { $0.id == id }) {
+            return block
+        } else {
+            print("*** No Block \(id) ***")
+            return blocks[blocks.endIndex + 1]      // Invalid - mwill cause crash
+        }
     }
     func point(_ id: Int) -> Point {
         return points.first(where: { $0.id == id })!

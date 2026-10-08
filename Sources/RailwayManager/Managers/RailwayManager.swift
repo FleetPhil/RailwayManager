@@ -35,13 +35,16 @@ enum LayoutName: String, CaseIterable, ExpressibleByArgument {
     case cellar = "Cellar"
     case testLoop = "TestLoop"
     case testLoop2 = "TestLoop2"
+    case xmas26 = "Xmas26"
     
     func makeLayout() -> Layout {
         switch self {
         case .cellar:       Cellar()
         case .testLoop:     TestLoop()
         case .testLoop2:    TestLoop2()
+        case .xmas26:       Xmas26()
         }
+        
     }
 }
 

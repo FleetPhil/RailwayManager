@@ -130,6 +130,10 @@ actor LayoutTrackStateService {
         log.verbose("Signal \(signal) changed from \(signalStates[signal] ?? (.off, .off)) to \(home), \(distant ?? .off)")
         try await signal.setState(home: home, distant: distant ?? .off)
         signalStates[signal] = (home, distant ?? .off)
+
+        // Telemetry: a publish failure must not fail the signal update
+        try? await MQTTManager.shared.sendSignalState(signal: signal, state: home)
+
     }
     
     // Will not be called if layout is dormant
@@ -141,8 +145,6 @@ actor LayoutTrackStateService {
             try await setSignalState(changedSignal.key,
                                      home: changedSignal.value.0,
                                      distant: changedSignal.value.1)
-            // Telemetry: a publish failure must not fail the signal update
-            try? await MQTTManager.shared.sendSignalState(signal: changedSignal.key, state: changedSignal.value.0)
         }
     }
 
