@@ -74,6 +74,7 @@ struct PointSetting: Equatable, Hashable, CustomStringConvertible {
 // @unchecked Sendable: connections are wired once during layout init and never mutated after
 final class Point: @unchecked Sendable, CustomStringConvertible {
     let id: Int
+    let address: Int                        // Hardware address
     let hardware: HardwarePoint
 
     nonisolated var description: String {
@@ -93,6 +94,7 @@ final class Point: @unchecked Sendable, CustomStringConvertible {
          reversedConnection: Bool = false
     )  {
         self.id = id
+        self.address = address
         self.hardware = DCCHardwarePoint(id: id, defaultPosition: defaultPosition, address: address, isReversed: reversedConnection)
         self.branchOrientation = orientation
         self.connections = connections

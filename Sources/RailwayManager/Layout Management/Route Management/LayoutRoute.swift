@@ -297,6 +297,18 @@ extension Layout {
             }
         }
         
+        // Hardware addresses must be unique among the sensors, among the signals and among the points
+        // Address 0 is a placeholder for an item with no hardware, so may be repeated
+        for (address, duplicates) in Dictionary(grouping: sensors.filter({ $0.address != 0 }), by: \.address).sorted(by: { $0.key < $1.key }) where duplicates.count > 1 {
+            throw TrainError.layoutError("Sensors \(duplicates.map(\.id)) share hardware address \(address)")
+        }
+        for (address, duplicates) in Dictionary(grouping: signals.filter({ $0.address != 0 }), by: \.address).sorted(by: { $0.key < $1.key }) where duplicates.count > 1 {
+            throw TrainError.layoutError("Signals \(duplicates.map(\.id)) share hardware address \(address)")
+        }
+        for (address, duplicates) in Dictionary(grouping: points.filter({ $0.address != 0 }), by: \.address).sorted(by: { $0.key < $1.key }) where duplicates.count > 1 {
+            throw TrainError.layoutError("Points \(duplicates.map(\.id)) share hardware address \(address)")
+        }
+        
         // Look for duplicated point settings from block exits
         var allPointSettings: [PointSetting] = []
         for block in self.blocks {

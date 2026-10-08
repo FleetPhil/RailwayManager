@@ -40,6 +40,7 @@ enum SignalIndication {
 final class Signal: CustomStringConvertible, Sendable {
     internal init(id: Int, address: Int, location: Block, indication: SignalIndication, direction: BlockDirection) {
         self.id = id
+        self.address = address
         self.location = location
         self.indication = indication
         self.direction = direction
@@ -52,6 +53,7 @@ final class Signal: CustomStringConvertible, Sendable {
     }
     
     let id: Int                             // Logical ID in layout
+    let address: Int                        // Hardware address
     let hardware: HardwareSignal
     let location: Block                     // Actual location of signal
     let direction: BlockDirection
