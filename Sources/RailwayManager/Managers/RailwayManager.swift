@@ -266,24 +266,43 @@ struct RailwayManager: ParsableCommand {
         try await layoutManager.runRoute(route: route, train: train)
     }
     
-    static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {
+    // Simulate a train passing over the sensor with the given logical id: a 1s pulse in the first
+    // orientation, then a 1s pulse in the second orientation starting 2s after the first
+    private static func simulateSensorPulses(_ sensorID: Int, first: SensorEventOrientation, second: SensorEventOrientation, _ layoutManager: LayoutManager) async {
+        // Sensor events carry the hardware address
+        guard let sensorAddress = layoutManager.layout.sensors.first(where: { $0.id == sensorID })?.address else {
+            log.error("Unknown sensor id \(sensorID)")
+            return
+        }
         
-        if input.starts(with: "sn") {            // Sensor north
-            if let sensorAddress = Int(input.dropFirst(2)) {
-                await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, .north))
-                Task {
-                    try await Task.sleep(for: .seconds(1))
-                    await LayoutEventHub.shared.publish(.didUnsetSensor(sensorAddress, .north))
-                }
+        await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, first))
+        Task {
+            // Task.sleep only throws if the task is cancelled, which stops the simulation
+            do {
+                try await Task.sleep(for: .seconds(1))
+                await LayoutEventHub.shared.publish(.didUnsetSensor(sensorAddress, first))
+                
+                try await Task.sleep(for: .seconds(1))
+                await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, second))
+                
+                try await Task.sleep(for: .seconds(1))
+                await LayoutEventHub.shared.publish(.didUnsetSensor(sensorAddress, second))
+            } catch {
+                log.debug("Sensor \(sensorID) simulation cancelled")
             }
         }
-        if input.starts(with: "ss") {            // Sensor south
-            if let sensorAddress = Int(input.dropFirst(2)) {
-                await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, .south))
-                Task {
-                    try await Task.sleep(for: .seconds(1))
-                    await LayoutEventHub.shared.publish(.didUnsetSensor(sensorAddress, .south))
-                }
+    }
+    
+    static func processConsoleCommand(_ input: String, _ layoutManager: LayoutManager) async throws {
+        
+        if input.starts(with: "sn") {            // Sensor north, followed by south
+            if let sensorID = Int(input.dropFirst(2)) {
+                await simulateSensorPulses(sensorID, first: .north, second: .south, layoutManager)
+            }
+        }
+        if input.starts(with: "ss") {            // Sensor south, followed by north
+            if let sensorID = Int(input.dropFirst(2)) {
+                await simulateSensorPulses(sensorID, first: .south, second: .north, layoutManager)
             }
         }
         if input.starts(with: "x") {
