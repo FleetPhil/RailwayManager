@@ -292,7 +292,7 @@ actor LayoutManager: Sendable {
             
             try await routeOperator.handleSensorSet(sensor, orientation: sensorOrientation)
             
-        case .didEndTimer(let timerRoute):
+        case .didEndTimer:
             // Currently unused
             log.error("Unexpected end timer event")
             

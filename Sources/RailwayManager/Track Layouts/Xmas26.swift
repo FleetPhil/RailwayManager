@@ -138,44 +138,44 @@ class Xmas26: Layout, @unchecked Sendable {
             
         // Sensor location start/end relative to the forward direction
         sensors = [
-            Sensor(id: 1, address: 1, location: .start(block("A"), 10)),
-            Sensor(id: 2, address: 2, location: .end(block("A"), 10)),
+            Sensor(id: 1, address: 0, location: .start(block("A"), 10)),
+            Sensor(id: 2, address: 0, location: .end(block("A"), 10)),
 
-            Sensor(id: 3, address: 3, location: .start(block("B"), 10)),
-            Sensor(id: 4, address: 4, location: .end(block("B"), 10)),
+            Sensor(id: 3, address: 0, location: .start(block("B"), 10)),
+            Sensor(id: 4, address: 0, location: .end(block("B"), 10)),
 
-            Sensor(id: 5, address: 5, location: .start(block("C"), 10)),
-            Sensor(id: 6, address: 6, location: .end(block("C"), 10)),
+            Sensor(id: 5, address: 0, location: .start(block("C"), 10)),
+            Sensor(id: 6, address: 0, location: .end(block("C"), 10)),
 
-            Sensor(id: 7, address: 7, location: .start(block("D"), 10)),
-            Sensor(id: 8, address: 8, location: .end(block("D"), 10)),
+            Sensor(id: 7, address: 0, location: .start(block("D"), 10)),
+            Sensor(id: 8, address: 0, location: .end(block("D"), 10)),
 
-            Sensor(id: 9, address: 9, location: .start(block("E"), 10)),
-            Sensor(id: 10, address: 10, location: .end(block("E"), 10)),
+            Sensor(id: 9, address: 0, location: .start(block("E"), 10)),
+            Sensor(id: 10, address: 0, location: .end(block("E"), 10)),
 
-            Sensor(id: 11, address: 11, location: .start(block("F"), 10)),
-            Sensor(id: 12, address: 12,location: .end(block("F"), 10)),
+            Sensor(id: 11, address: 0, location: .start(block("F"), 10)),
+            Sensor(id: 12, address: 0,location: .end(block("F"), 10)),
 
-            Sensor(id: 13, address: 13, location: .start(block("G"), 10)),
-            Sensor(id: 14, address: 14, location: .end(block("G"), 10)),
+            Sensor(id: 13, address: 0, location: .start(block("G"), 10)),
+            Sensor(id: 14, address: 0, location: .end(block("G"), 10)),
 
-            Sensor(id: 15, address: 15, location: .start(block("H"), 10)),
-            Sensor(id: 16, address: 16, location: .end(block("H"), 10)),
+            Sensor(id: 15, address: 0, location: .start(block("H"), 10)),
+            Sensor(id: 16, address: 0, location: .end(block("H"), 10)),
 
-            Sensor(id: 17, address: 17, location: .start(block("J"), 10)),
-            Sensor(id: 18, address: 18,location: .end(block("J"), 10)),
+            Sensor(id: 17, address: 0, location: .start(block("J"), 10)),
+            Sensor(id: 18, address: 0,location: .end(block("J"), 10)),
 
-            Sensor(id: 19, address: 19, location: .start(block("K"), 10)),
-            Sensor(id: 20, address: 20, location: .end(block("K"), 10)),
+            Sensor(id: 19, address: 0, location: .start(block("K"), 10)),
+            Sensor(id: 20, address: 0, location: .end(block("K"), 10)),
 
-            Sensor(id: 21, address: 21, location: .start(block("L"), 10)),
-            Sensor(id: 22, address: 22, location: .end(block("L"), 10)),
+            Sensor(id: 21, address: 0, location: .start(block("L"), 10)),
+            Sensor(id: 22, address: 0, location: .end(block("L"), 10)),
 
-            Sensor(id: 23, address: 23, location: .start(block("M"), 10)),
-            Sensor(id: 24, address: 24, location: .end(block("M"), 10)),
+            Sensor(id: 23, address: 0, location: .start(block("M"), 10)),
+            Sensor(id: 24, address: 0, location: .end(block("M"), 10)),
             
-            Sensor(id: 25, address: 25, location: .start(block("N"), 10)),
-            Sensor(id: 26, address: 26, location: .end(block("N"), 10)),
+            Sensor(id: 25, address: 0, location: .start(block("N"), 10)),
+            Sensor(id: 26, address: 0, location: .end(block("N"), 10)),
         ]
         buildLayout()
     }
