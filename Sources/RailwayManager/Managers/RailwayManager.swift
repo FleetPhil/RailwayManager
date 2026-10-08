@@ -298,6 +298,33 @@ struct RailwayManager: ParsableCommand {
             let url = try layoutManager.layout.writeTopologyDump()
             log.info("Topology written to \(url.path)")
         }
+
+        if input.starts(with: "rr") {            // Run route: rr <fromBlock> <toBlock> <f|r>
+            let args = input.dropFirst(2).split(separator: " ").map(String.init)
+
+            guard args.count == 3, let direction: BlockDirection = ["f": .forward, "r": .reverse][args[2]] else {
+                log.error("Usage: rr <fromBlock> <toBlock> <f|r>")
+                return
+            }
+
+            // Block ids are upper case
+            let fromBlock = args[0].uppercased()
+            let toBlock = args[1].uppercased()
+
+            // Test command: single segment route, route and train id fixed at 1
+            let routeParams = MQTTManager.RouteParams(
+                command: .runRoute,
+                routeID: 1,
+                trainID: 1,
+                segments: [.init(fromBlock: fromBlock, toBlock: toBlock, direction: direction, waitTime: .halt)])
+
+            // A rejected route is logged so that the console keeps running
+            do {
+                try await runRoute(from: routeParams, layoutManager: layoutManager)
+            } catch {
+                log.error("Route \(fromBlock)-\(toBlock) rejected: \(error)")
+            }
+        }
     }
 }
 
