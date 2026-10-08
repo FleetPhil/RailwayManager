@@ -299,11 +299,14 @@ struct RailwayManager: ParsableCommand {
             log.info("Topology written to \(url.path)")
         }
 
-        if input.starts(with: "rr") {            // Run route: rr <fromBlock> <toBlock> <f|r>
+        if input.starts(with: "rr") {            // Run route: rr <fromBlock> <toBlock> <f|r> [train]
             let args = input.dropFirst(2).split(separator: " ").map(String.init)
 
-            guard args.count == 3, let direction: BlockDirection = ["f": .forward, "r": .reverse][args[2]] else {
-                log.error("Usage: rr <fromBlock> <toBlock> <f|r>")
+            // Train id is optional and defaults to 1
+            guard args.count == 3 || args.count == 4,
+                  let direction: BlockDirection = ["f": .forward, "r": .reverse][args[2]],
+                  let trainID = args.count == 4 ? Int(args[3]) : 1 else {
+                log.error("Usage: rr <fromBlock> <toBlock> <f|r> [train]")
                 return
             }
 
@@ -311,11 +314,11 @@ struct RailwayManager: ParsableCommand {
             let fromBlock = args[0].uppercased()
             let toBlock = args[1].uppercased()
 
-            // Test command: single segment route, route and train id fixed at 1
+            // Test command: single segment route, route id fixed at 1
             let routeParams = MQTTManager.RouteParams(
                 command: .runRoute,
                 routeID: 1,
-                trainID: 1,
+                trainID: trainID,
                 segments: [.init(fromBlock: fromBlock, toBlock: toBlock, direction: direction, waitTime: .halt)])
 
             // A rejected route is logged so that the console keeps running
