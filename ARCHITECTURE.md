@@ -29,7 +29,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 | `Layout Management/Signals/` | `SignalTrackState` (per-signal aspect logic), `SignalCoordinator` (whole-layout refresh, distant & diverging aspects) |
 | `Layout Management/Train control/` | `LayoutTrainController` (actor – train state/direction, DCC commands), `DCCSessionStore`, `TrainRuntimeState` |
 | `Train/`, `Params/` | `Train`, `TrainSpeed`, `TrainSensor`; `TrainParams`, `TrainSpeedSetting`, `TrainStartFunction` |
-| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestLoop` (reversing-loop test layout, dummy addresses), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster); `Cellar Routes` (`setupRoutes`: hard-coded test route per layout), `TestLoop Routes` |
+| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestLoop` (reversing-loop test layout, dummy addresses), `Xmas26` (13 blocks A–N, 10 points, 26 sensors: an oval A/B – E – F/G – H with passing loops, a second circuit J – K – C/D rejoining at points 1–3, and a branch L to sidings M and N; signal addresses are placeholders (0), no block lengths, no built-in route), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster); `Cellar Routes` (`setupRoutes`: hard-coded test route per layout), `TestLoop Routes` |
 | `MQTTManager/` | `MQTTManager` actor – telemetry publish, topology, route-request subscription, `RouteParams` |
 | `ModelRailwayHardware/` | Hardware abstraction: `HardwarePoint`/`DCCHardwarePoint`/`CBUSHardwarePoint`, `HardwareSignal`/`CBUSHardwareSignal`, `HardwareTrain`/`CBUSHardwareTrain`, `DCCDirection`, `Led`, `Light`, `EventBus<T>`, `CBUSManager` (+ serial discovery, message encode/decode, op codes) |
 | `Diagnostics/` | `printStatus()` dump of a snapshot |
