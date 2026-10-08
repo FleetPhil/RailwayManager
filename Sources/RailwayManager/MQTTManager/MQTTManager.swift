@@ -97,9 +97,11 @@ actor MQTTManager: Sendable {
     func sendTopolology(fromLayout: Layout) async throws {
         do {
             let payload = try String(decoding: JSONEncoder().encode(stateTopology(fromLayout)), as: UTF8.self)
+            // Retained so that a state viewer connecting later still receives the topology
             try await client?.publish(to: topic + layoutTopic,
                                       payload: ByteBufferAllocator().buffer(string: payload),
-                                      qos: .atLeastOnce)
+                                      qos: .atLeastOnce,
+                                      retain: true)
         } catch {
             handleJSONError(error)
             throw TrainError.applicationError("Failed to publish layout topology")
