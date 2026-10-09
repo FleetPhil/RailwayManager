@@ -104,6 +104,11 @@ struct RailwayManager: ParsableCommand {
                     // Start MQTT
                     try await MQTTManager.shared.connect()
                     try await MQTTManager.shared.sendTopolology(fromLayout: layout)
+
+                    // State is not retained, so tell viewers every train is idle (location unknown) until a route starts
+                    for train in Trains.trains {
+                        try await MQTTManager.shared.sendTrainState(train: train, state: .idle(nil))
+                    }
                     
                     // Start CBUS
                     if noCBUS == false {
