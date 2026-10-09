@@ -94,7 +94,55 @@ actor MQTTManager: Sendable {
         client = nil
     }
     
+    // Collects topic names from a publish listener task
+    private actor TopicCollector {
+        private(set) var names: Set<String> = []
+        func add(_ name: String) { names.insert(name) }
+    }
+    
+    // Remove every retained block and train state left on the broker, e.g. by a previous run or another
+    // layout. The broker can't list its retained topics, so subscribe to them (retained messages arrive
+    // straight after the subscription), collect their names for a moment and then clear each one by
+    // publishing an empty retained payload.
+    func clearRetainedStates() async throws {
+        guard GlobalOptions.noMQTT == false, let client else { return }
+        
+        let prefix = topic + stateTopic + "/"
+        let filters = [prefix + "block/+", prefix + "train/+"]
+        
+        let collector = TopicCollector()
+        let listener = client.createPublishListener()
+        let task = Task {
+            for await result in listener {
+                if case .success(let publish) = result,
+                   publish.retain,
+                   publish.topicName.hasPrefix(prefix),
+                   publish.payload.readableBytes > 0 {
+                    await collector.add(publish.topicName)
+                }
+            }
+        }
+        
+        _ = try await client.subscribe(to: filters.map { MQTTSubscribeInfo(topicFilter: $0, qos: .atLeastOnce) })
+        try await Task.sleep(for: .milliseconds(750))
+        task.cancel()
+        try await client.unsubscribe(from: filters)
+        
+        let names = await collector.names
+        for name in names {
+            try await client.publish(to: name, payload: ByteBuffer(), qos: .atLeastOnce, retain: true)
+        }
+        log.info("Cleared \(names.count) retained states")
+    }
+    
     func sendTopolology(fromLayout: Layout) async throws {
+        // A new topology means a new run: wipe the retained states of the previous one first
+        do {
+            try await clearRetainedStates()
+        } catch {
+            log.error("Failed to clear retained states: \(error)")
+        }
+        
         do {
             let payload = try String(decoding: JSONEncoder().encode(stateTopology(fromLayout)), as: UTF8.self)
             // Retained so that a state viewer connecting later still receives the topology
@@ -147,6 +195,16 @@ actor MQTTManager: Sendable {
         }
     }
 
+    // Publish an item's state on the state topic and, retained, on its own subtopic
+    // (state/<kind>/<id>) so a viewer that connects later can read the latest state of every item.
+    // A retained message is kept per topic, so the shared state topic cannot be retained itself.
+    private func publishRetainedState(_ state: LayoutItemState, payload: String, kind: String) async throws {
+        try await client?.publish(to: topic + stateTopic + "/" + kind + "/" + state.itemID,
+                                  payload: ByteBufferAllocator().buffer(string: payload),
+                                  qos: .atLeastOnce,
+                                  retain: true)
+    }
+
     func sendTrainState(train: Train, state: TrainRuntimeState) async throws {
         do {
             let state = LayoutItemState(itemType: .train,
@@ -160,6 +218,7 @@ actor MQTTManager: Sendable {
                 try await client?.publish(to: topic + stateTopic,
                                           payload: ByteBufferAllocator().buffer(string: payload),
                                           qos: .atLeastOnce)
+                try await publishRetainedState(state, payload: payload, kind: "train")
             }
         } catch {
             handleJSONError(error)
@@ -206,6 +265,7 @@ actor MQTTManager: Sendable {
                 try await client?.publish(to: topic + stateTopic,
                                           payload: ByteBufferAllocator().buffer(string: payload),
                                           qos: .atLeastOnce)
+                try await publishRetainedState(state, payload: payload, kind: "block")
             }
         } catch {
             handleJSONError(error)
