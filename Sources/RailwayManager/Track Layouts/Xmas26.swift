@@ -29,16 +29,16 @@ class Xmas26: Layout, @unchecked Sendable {
             Block(id: "N")
         ]
         points = [
-            Point(id: 1, address: 55, orientation: .right, reversedConnection: true),
-            Point(id: 2, address: 52, orientation: .left, defaultPosition: .splitStraight),
-            Point(id: 3, address: 56, orientation: .left, defaultPosition: .splitStraight),
-            Point(id: 4, address: 54, orientation: .left, defaultPosition: .splitStraight, reversedConnection: true),
-            Point(id: 5, address: 59, orientation: .right, defaultPosition: .splitStraight),
-            Point(id: 6, address: 58, orientation: .right, defaultPosition: .splitStraight),
-            Point(id: 7, address: 51, orientation: .left, defaultPosition: .splitStraight, reversedConnection: true),
+            Point(id: 1, address: 50, orientation: .right, reversedConnection: true),
+            Point(id: 2, address: 57, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 3, address: 52, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 4, address: 55, orientation: .left, defaultPosition: .splitStraight, reversedConnection: true),
+            Point(id: 5, address: 51, orientation: .right, defaultPosition: .splitStraight),
+            Point(id: 6, address: 56, orientation: .right, defaultPosition: .splitStraight),
+            Point(id: 7, address: 58, orientation: .left, defaultPosition: .splitStraight, reversedConnection: true),
             Point(id: 8, address: 53, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
-            Point(id: 9, address: 57, orientation: .right),
-            Point(id: 10, address: 60, orientation: .right),
+            Point(id: 9, address: 54, orientation: .right),
+            Point(id: 10, address: 59, orientation: .right),
         ]
         
         point(1).setConnection(from: .single, to: .point(point(2), .splitBranch))
