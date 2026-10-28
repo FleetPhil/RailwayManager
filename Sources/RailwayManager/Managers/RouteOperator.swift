@@ -359,7 +359,7 @@ actor RouteOperator {
         switch sensor.location {
         case .station:
             // We need to stop after half a train length
-            let speed = Double(train.speeds[lastCommandedTrainSpeed]?.speed ?? 10)
+            let speed = Double(train.speeds.setting(for: lastCommandedTrainSpeed)?.speed ?? 10)
             let length = Double(train.length) / 2
             
             let delay = length / speed

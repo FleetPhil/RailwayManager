@@ -58,7 +58,7 @@ struct Train: Sendable, CustomStringConvertible {
     
     let length: Int
     
-    let speeds: [ TrainSpeed : TrainSpeedSetting]
+    let speeds: TrainSpeeds
     let startFunctions: [TrainStartFunction]
     
     let trainFrontSensorOrientation: SensorEventOrientation = .north
@@ -68,7 +68,7 @@ struct Train: Sendable, CustomStringConvertible {
         self.id = trainParams.id
         self.name = trainParams.name
         self.length = trainParams.length
-        self.speeds = trainParams.trainSpeeds
+        self.speeds = trainParams.speeds
         self.startFunctions = trainParams.startFunctions
         
         self.hardware = CBUSHardwareTrain(id: trainParams.id, address: trainParams.address)
@@ -94,7 +94,7 @@ struct Train: Sendable, CustomStringConvertible {
     func powerForSpeed(_ trainSpeed: TrainSpeed) -> Int {
         switch trainSpeed {
         case .manual(speed: let speed):     return speed
-        default:                            return speeds[trainSpeed]?.power ?? 0
+        default:                            return speeds.setting(for: trainSpeed)?.power ?? 0
         }
     }
     

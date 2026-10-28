@@ -9,7 +9,7 @@ struct GlobalOptions {
     nonisolated(unsafe) static var noMQTT: Bool = true
     nonisolated(unsafe) static var noCBUS: Bool = true
     nonisolated(unsafe) static var noDCC: Bool = true
-    nonisolated(unsafe) static var mqttHost: String = "192.168.68.52"
+    nonisolated(unsafe) static var mqttHost: String = ""
     nonisolated(unsafe) static var mqttPort: Int = 1883
     // Allow test commands (e.g. simulated sensor events) to be entered on stdin
     nonisolated(unsafe) static var consoleTestCommands: Bool = true
@@ -102,13 +102,14 @@ struct RailwayManager: ParsableCommand {
             get async {
                 do {
                     let layout = layoutName.makeLayout()
+                    let trains = TrainRoster.standard
                     
                     // Start MQTT
                     try await MQTTManager.shared.connect()
                     try await MQTTManager.shared.sendTopolology(fromLayout: layout)
 
                     // State is not retained, so tell viewers every train is idle (location unknown) until a route starts
-                    for train in Trains.trains {
+                    for train in trains.trains {
                         try await MQTTManager.shared.sendTrainState(train: train, state: .idle(nil))
                     }
                     
@@ -117,7 +118,7 @@ struct RailwayManager: ParsableCommand {
                         try CBUSManager.shared.setup()
                     }
                     
-                    return try await RailwayManager.createLayoutManager(layout: layout)
+                    return try await RailwayManager.createLayoutManager(layout: layout, trains: trains)
 
                 } catch {
                     fatalError("*** Failed to initialise layout: \(error)")
@@ -151,8 +152,7 @@ struct RailwayManager: ParsableCommand {
             if GlobalOptions.noMQTT {
                 // No route source without MQTT: run the hardcoded test route for the layout, if any
                 if let route = try await setupRoutes(layoutManager: layoutManager) {
-                    let sbb = Trains.trains.first!
-                    try await layoutManager.runRoute(route: route, train: sbb)
+                    try await layoutManager.runRoute(route: route, train: layoutManager.trains.trains[0])
                 } else {
                     log.info("No built-in route for layout \(type(of: layoutManager.layout))")
                 }
@@ -188,7 +188,7 @@ struct RailwayManager: ParsableCommand {
         log.info("Manager setup finished.")
     }
     
-    static func createLayoutManager(layout: Layout) async throws -> LayoutManager {
+    static func createLayoutManager(layout: Layout, trains: TrainRoster) async throws -> LayoutManager {
         do {
             try layout.layoutIsValid()
         } catch {
@@ -196,7 +196,7 @@ struct RailwayManager: ParsableCommand {
             throw TrainError.layoutError("Unable to initialise layout")
         }
 
-        return try await LayoutManager(layout: layout)
+        return try await LayoutManager(layout: layout, trains: trains)
     }
     
     // Monitor route requests received over MQTT and run each valid one
@@ -248,7 +248,7 @@ struct RailwayManager: ParsableCommand {
     static func runRoute(from routeParams: MQTTManager.RouteParams, layoutManager: LayoutManager) async throws {
         let layout = layoutManager.layout
         
-        guard let train = Trains.trains.first(where: { $0.id == routeParams.trainID }) else {
+        guard let train = layoutManager.trains.train(id: routeParams.trainID) else {
             throw TrainError.applicationError("Unknown train \(routeParams.trainID) for route \(routeParams.routeID)")
         }
         

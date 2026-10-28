@@ -18,6 +18,9 @@ actor LayoutManager: Sendable {
     // Layout
     let layout: Layout
     
+    // The trains that can be run
+    let trains: TrainRoster
+    
     // Active Routes
     private var routeOperators: [Train : RouteOperator] = [:]
 
@@ -42,8 +45,9 @@ actor LayoutManager: Sendable {
     private var shutdownTask: Task<Void, Never>? = nil
     
     // MARK: Init
-    init(layout: Layout) async throws {
+    init(layout: Layout, trains: TrainRoster) async throws {
         self.layout = layout
+        self.trains = trains
         
         self.trackStateService = LayoutTrackStateService(layout: layout)
         self.signalCoordinator = SignalCoordinator()

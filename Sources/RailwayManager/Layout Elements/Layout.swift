@@ -18,8 +18,6 @@ class Layout: @unchecked Sendable  {
     nonisolated(unsafe) var signals: [Signal] = []
     nonisolated(unsafe) var lights: [Light] = []
     
-    nonisolated(unsafe) var trains: [Train] = []
-    
     struct BlockRoute: CustomStringConvertible {
         var fromBlock: Block
         var toBlock: Block
@@ -62,9 +60,6 @@ class Layout: @unchecked Sendable  {
     }
     func sensor(_ address: Int) -> Sensor? {
         return sensors.first(where: { $0.address == address })
-    }
-    func train(_ id: Int) -> Train? {
-        return trains.first(where: { $0.id == id })!
     }
     
     func signal(_ id: Int) -> Signal {
