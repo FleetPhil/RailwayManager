@@ -9,7 +9,7 @@ struct GlobalOptions {
     nonisolated(unsafe) static var noMQTT: Bool = true
     nonisolated(unsafe) static var noCBUS: Bool = true
     nonisolated(unsafe) static var noDCC: Bool = true
-    nonisolated(unsafe) static var mqttHost: String = "192.168.86.56"
+    nonisolated(unsafe) static var mqttHost: String = "192.168.68.52"
     nonisolated(unsafe) static var mqttPort: Int = 1883
     // Allow test commands (e.g. simulated sensor events) to be entered on stdin
     nonisolated(unsafe) static var consoleTestCommands: Bool = true
@@ -69,7 +69,7 @@ struct RailwayManager: ParsableCommand {
     var noDCC = false
 
     @Option(help: "MQTT broker host")
-    var mqttHost: String = ProcessInfo.processInfo.environment["MQTT_HOST"] ?? "192.168.86.56"
+    var mqttHost: String = ProcessInfo.processInfo.environment["MQTT_HOST"] ?? "192.168.68.52"
     
     @Option(help: "MQTT broker port")
     var mqttPort: Int = ProcessInfo.processInfo.environment["MQTT_PORT"].flatMap(Int.init) ?? 1883
