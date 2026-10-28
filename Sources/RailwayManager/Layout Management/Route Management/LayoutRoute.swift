@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftGraph
 
 
 // Create a route on the layout consisting of a single block -> block path
@@ -16,86 +15,74 @@ extension Layout {
     // Return the Path between a pair of blocks, starting in the given direction in fromBlock.
     // toBlock may be reached in either direction (they differ only if the path crosses a loop closure).
     func path(fromBlock: Block, toBlock: Block, direction: BlockDirection) throws -> Path {
-        let edges = layoutGraph.bfs(from: graphVertex(fromBlock, direction), goalTest: { graphBlockID($0) == toBlock.id })
-        let vertices = layoutGraph.edgesToVertices(edges: edges)
-        
-        // Check for no route
-        if vertices.isEmpty { throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)") }
-        
-        // If not empty the array must contain at least 2 vertices (from & to).
-        // Each transition is checked against blockRoutes by pathItemForTransition(), which throws if missing
-        
-        var pathItems: [PathItem] = []
-        var index: Int = 0
-        
-        while vertices.count > index + 1 {
+        try path(fromBlock: fromBlock, toBlock: toBlock, direction: direction, isBlocked: { _ in false })
+    }
+
+    // As path(fromBlock:toBlock:direction:), not using any block route for which isBlocked returns true.
+    // Breadth-first search over (block, travel direction) vertices, with the block routes as edges
+    // (direct connections, single points or groups of points; an edge changes direction only across
+    // a loop closure). Edges are tried in blockRoutes order, so ties give the same path every time.
+    func path(fromBlock: Block, toBlock: Block, direction: BlockDirection,
+              isBlocked: (BlockRoute) -> Bool) throws -> Path {
+        struct Vertex: Hashable {
+            let block: Block
+            let direction: BlockDirection
+        }
+
+        let start = Vertex(block: fromBlock, direction: direction)
+        var visited: Set<Vertex> = []
+        var arrivedBy: [Vertex : BlockRoute] = [:]     // The block route used to reach each vertex
+        var queue: [Vertex] = [start]
+        var goal: Vertex?
+
+        while queue.isEmpty == false {
+            let vertex = queue.removeFirst()
+            if vertex.block == toBlock {
+                goal = vertex
+                break
+            }
+            for blockRoute in blockRoutes where blockRoute.fromBlock == vertex.block
+                && blockRoute.direction == vertex.direction && isBlocked(blockRoute) == false {
+                let next = Vertex(block: blockRoute.toBlock, direction: blockRoute.toDirection)
+                if visited.insert(next).inserted {
+                    arrivedBy[next] = blockRoute
+                    queue.append(next)
+                }
+            }
+        }
+
+        // No route if toBlock is not reachable, or is fromBlock
+        guard let goal, goal.block != fromBlock else {
+            throw TrainError.invalidPath("No route for \(fromBlock) to \(toBlock) (\(direction)")
+        }
+
+        // Walk back from the goal to the start
+        var blockRoutesOnPath: [BlockRoute] = []
+        var vertex = goal
+        while vertex != start, let blockRoute = arrivedBy[vertex] {
+            blockRoutesOnPath.insert(blockRoute, at: 0)
+            vertex = Vertex(block: blockRoute.fromBlock, direction: blockRoute.direction)
+        }
+
+        let pathItems = blockRoutesOnPath.enumerated().map({ index, blockRoute in
             var role: PathItemRole {
-                if vertices.count == 2 { return .only }       // Start and end only
+                if blockRoutesOnPath.count == 1 { return .only }       // Start and end only
                 if index == 0 { return .first }
-                if index + 2 == vertices.count { return .last }
+                if index + 1 == blockRoutesOnPath.count { return .last }
                 return .intermediate
             }
-            
-            pathItems.append(try pathItemForTransition(fromBlock: block(graphBlockID(vertices[index])),
-                                                       fromDirection: graphDirection(vertices[index]),
-                                                       toBlock: block(graphBlockID(vertices[index+1])),
-                                                       toDirection: graphDirection(vertices[index+1]),
-                                                       role: role))
-            index += 1
-        }
-        
+            return PathItem(fromBlock: blockRoute.fromBlock,
+                            toBlock: blockRoute.toBlock,
+                            fromDirection: blockRoute.direction,
+                            toDirection: blockRoute.toDirection,
+                            role: role,
+                            pointSettings: blockRoute.pointSettings)
+        })
+
 //        log.verbose("Path is \(pathItems)")
         return Path(direction: direction, pathItems: pathItems)
     }
-    
-    private func pathItemForTransition(fromBlock: Block, fromDirection: BlockDirection,
-                                       toBlock: Block, toDirection: BlockDirection,
-                                       role: PathItemRole) throws -> PathItem {
-        if let blockRoute = blockRoutes.first(where: {
-            $0.fromBlock == fromBlock &&
-            $0.toBlock == toBlock &&
-            $0.direction == fromDirection &&
-            $0.toDirection == toDirection
-        }) {
-            return PathItem(fromBlock: fromBlock,
-                            toBlock: toBlock,
-                            fromDirection: fromDirection,
-                            toDirection: toDirection,
-                            role: role,
-                            pointSettings: blockRoute.pointSettings)
-        } else {
-            throw TrainError.invalidPath("No block route from \(fromBlock) to \(toBlock), \(fromDirection) -> \(toDirection)")
-        }
-    }
-    
-    // Layout graph vertex for a block and travel direction, e.g. "A+" (forward) or "A-" (reverse)
-    func graphVertex(_ block: Block, _ direction: BlockDirection) -> String {
-        block.id + (direction == .forward ? "+" : "-")
-    }
-    
-    private func graphBlockID(_ vertex: String) -> String {
-        String(vertex.dropLast())
-    }
-    
-    private func graphDirection(_ vertex: String) -> BlockDirection {
-        vertex.last == "+" ? .forward : .reverse
-    }
-    
-    // The layout graph builder.
-    // Vertices are (block, travel direction) pairs, Edges are block routes: direct connections,
-    // single points or groups of points. An edge changes direction only across a loop closure.
-    
-    func makeLayoutGraph() -> UnweightedGraph<String> {
-        let vertices = blocks.flatMap({ block in BlockDirection.allCases.map({ graphVertex(block, $0) }) })
-        let layoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: vertices)
-  
-        blockRoutes.forEach({ route in
-            layoutGraph.addEdge(from: graphVertex(route.fromBlock, route.direction),
-                                to: graphVertex(route.toBlock, route.toDirection), directed: true)
-        })
-        return layoutGraph
-    }
-    
+
     func makeBlockRoutes() -> [BlockRoute] {
         var routes: [BlockRoute] = []
 

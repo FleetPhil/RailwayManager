@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftGraph
 
 // Base class for layout, will always be subclassed for the layout implementation
 class Layout: @unchecked Sendable  {
@@ -33,20 +32,16 @@ class Layout: @unchecked Sendable  {
             return "\(fromBlock)-\(toBlock) \(direction)\(flip): \(pointSettings.map({ $0 }))"
         }
     }
-    // The routes from the layout graph calculated at init
+    // Every block -> block transition, calculated at init; the edges searched by path()
     var blockRoutes: [BlockRoute] = []
-
-    // The layout graph: vertices are (block, travel direction) pairs, see graphVertex()
-    var layoutGraph: UnweightedGraph<String> = UnweightedGraph(vertices: [])
 
     init() {  }
 
     // Must be called at the end of every subclass override init(), after all
-    // blocks/points/sensors/signals are assigned. Builds the route and graph
-    // caches that are unsafe to initialise lazily on a Sendable class.
+    // blocks/points/sensors/signals are assigned. Builds the block route
+    // cache, which is unsafe to initialise lazily on a Sendable class.
     func buildLayout() {
         blockRoutes = makeBlockRoutes()
-        layoutGraph = makeLayoutGraph()
     }
     
     // Helper functions
