@@ -203,10 +203,10 @@ actor RouteOperator {
         
         do {
             for startFunction in train.startFunctions {
-                log.verbose("\(rd): Start function \(startFunction.startFunction) for train \(train.id)")
-                try await trainController.setTrainFunction(train: train, function: startFunction.startFunction, on: true)
+                log.verbose("\(rd): Start function \(startFunction.function) for train \(train.id)")
+                try await trainController.setTrainFunction(train: train, function: startFunction.function, on: true)
                 try await Task.sleep(for: .seconds(startFunction.delay))
-                try await trainController.setTrainFunction(train: train, function: startFunction.startFunction, on: false)
+                try await trainController.setTrainFunction(train: train, function: startFunction.function, on: false)
             }
             
             // Start sequence complete: sensor events are processed from here on

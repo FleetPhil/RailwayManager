@@ -1,0 +1,44 @@
+[
+    {
+        "id": 1,
+        "name": "SBB Re430",
+        "address": 20,
+        "length": 70,
+        "speeds": {
+            "slow":   { "power": 40, "speed": 6 },
+            "normal": { "power": 50, "speed": 15 },
+            "fast":   { "power": 70, "speed": 29 }
+        },
+        "startFunctions": [
+            { "function": 8,  "delay": 8,  "description": "Platform announcement",      "enabled": false },
+            { "function": 2,  "delay": 2,  "description": "Horn up/down",               "enabled": false },
+            { "function": 3,  "delay": 2,  "description": "Horn single",                "enabled": false },
+            { "function": 7,  "delay": 5,  "description": "Running noise",              "enabled": false },
+            { "function": 5,  "delay": 2,  "description": "Whistle" },
+            { "function": 14, "delay": 5,  "description": "Long platform announcement", "enabled": false },
+            { "function": 15, "delay": 10, "description": "Long platform announcement", "enabled": false }
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Bernina",
+        "address": 22,
+        "length": 26,
+        "speeds": {
+            "slow":   { "power": 25, "speed": 12 },
+            "normal": { "power": 40, "speed": 20 },
+            "fast":   { "power": 60, "speed": 40 }
+        }
+    },
+    {
+        "id": 3,
+        "name": "Train 3",
+        "address": 23,
+        "length": 26,
+        "speeds": {
+            "slow":   { "power": 25, "speed": 12 },
+            "normal": { "power": 40, "speed": 20 },
+            "fast":   { "power": 60, "speed": 40 }
+        }
+    }
+]

@@ -29,18 +29,18 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 | `Layout Management/Signals/` | `SignalTrackState` (per-signal aspect logic), `SignalCoordinator` (whole-layout refresh, distant & diverging aspects) |
 | `Layout Management/Train control/` | `LayoutTrainController` (actor – train state/direction, DCC commands), `DCCSessionStore`, `TrainRuntimeState` |
 | `Train/`, `Params/` | `Train`, `TrainSpeed`, `TrainSensor`; `TrainParams`, `TrainSpeeds`, `TrainSpeedSetting`, `TrainStartFunction`, `TrainRoster` |
-| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestLoop` (reversing-loop test layout, dummy addresses), `Xmas26` (13 blocks A–N, 10 points, 26 sensors: an oval A/B – E – F/G – H with passing loops, a second circuit J – K – C/D rejoining at points 1–3, and a branch L to sidings M and N; signal addresses are placeholders (0), no block lengths, no built-in route), `TestTrack2`, `TramSplit`; `Trains` (hard-coded train roster, `TrainRoster.standard`); `Cellar Routes` (`setupRoutes`: hard-coded test route per layout), `TestLoop Routes` |
+| `Track Layouts/` | Concrete layouts: `Cellar` (live), `TestLoop` (reversing-loop test layout, dummy addresses), `Xmas26` (13 blocks A–N, 10 points, 26 sensors: an oval A/B – E – F/G – H with passing loops, a second circuit J – K – C/D rejoining at points 1–3, and a branch L to sidings M and N; signal addresses are placeholders (0), no block lengths, no built-in route), `TestTrack2`, `TramSplit`; `Cellar Routes` (`setupRoutes`: hard-coded test route per layout), `TestLoop Routes` |
 | `MQTTManager/` | `MQTTManager` actor – telemetry publish, topology, route-request subscription, `RouteParams` |
 | `ModelRailwayHardware/` | Hardware abstraction: `HardwarePoint`/`DCCHardwarePoint`/`CBUSHardwarePoint`, `HardwareSignal`/`CBUSHardwareSignal`, `HardwareTrain`/`CBUSHardwareTrain`, `DCCDirection`, `Led`, `Light`, `EventBus<T>`, `CBUSManager` (+ serial discovery, message encode/decode, op codes) |
 | `Diagnostics/` | `printStatus()` dump of a snapshot |
 | `Errors/` | `TrainError` (with `isFatal`) |
 | `Extensions/` | Array `isUnique`, a `Queue`, async Sequence helpers, String helpers |
-| `Resources/` | `params.json`, `trainParams.json` — **legacy, not read by any code** |
+| `Resources/` | `trains.json` (built-in train roster, see section 4); `params.json` — **legacy, not read by any code** |
 
 ## 3. Runtime architecture
 
 ```
-            CLI flags (-noMQTT -noCBUS -noDCC -layout --mqtt-host --mqtt-port --log-level)
+            CLI flags (-noMQTT -noCBUS -noDCC -layout -trains --mqtt-host --mqtt-port --log-level)
                                    │
                           RailwayManager.run()
                                    │  builds the -layout layout (default Cellar), validates, connects MQTT, opens CBUS
@@ -107,7 +107,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - `TrainRuntimeState`: `idle(Block?)` (the block the train is in, nil if not known), `running(item), waiting, stoppingForResource, stoppedForResource, stoppingAtSensor, stoppingForTimer, stoppedAtSensor`. `lastKnownBlock` gives the train's front block from any state (from the path item or sensor; nil for `waiting`/`stoppingForResource`). Routes set `idle` with the start block (`resetRoute`) or the stop sensor's block (`endRoute`); `activateSession` and `stopAllTrains` keep the last known block, so it survives a shutdown, an error or a stop-all reset (when block states are reset to vacant but the train has not moved). MQTT train state shows `Idle (B)`, or `Idle` if the block is not known.
 - DCC sessions: `requestSession` (RLOC) → PLOC arrives as `didGetSession` → `activateSession`; ERR "session in use" → `sessionAllocated` → steal (GLOC). Commands wait up to 5 s for a session, then throw `noDCCSession`.
 - Speeds: `TrainSpeed` `stop/slow/normal/fast/manual` mapped to power per train by `TrainSpeeds` (slow, normal and fast each a power and a speed in cm/s, used for station stop timing; stop is always zero, a manual speed is its own power).
-- Roster: `TrainRoster` (the `Train`s built once from `TrainParams`, looked up with `train(id:)`) is created at startup and held by `LayoutManager.trains`; currently always `TrainRoster.standard` from `Trains.swift`.
+- Roster: `TrainRoster` (the `Train`s built once from `TrainParams`, looked up with `train(id:)`) is loaded at startup by `TrainRoster.load(path:)` and held by `LayoutManager.trains`. It is read from the JSON file given with `-trains <path>`, otherwise `~/.railwaymanager/trains.json` if it exists, otherwise the built-in `Resources/trains.json`. Each train: `id`, `name`, DCC `address`, `length` (cm), `speeds` (`slow`/`normal`/`fast`, each `{power, speed}`) and optional `startFunctions` (`{function, delay, description?, enabled?}`; a function with `"enabled": false` is kept in the file but not run). The roster is validated on loading (ids and addresses unique, lengths and speeds positive, power 0–100 and not decreasing from slow to fast, delays not negative); a missing, unreadable or invalid file given or found is fatal at startup (`TrainError.trainRosterError`).
 
 ## 5. Route execution flow (`RouteOperator`)
 
@@ -162,11 +162,11 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Several signals/sensors in `Cellar` have address 0 (not wired yet); station sensors for H/J commented out.
 
 **Dead / legacy code**
-- `Resources/params.json`, `trainParams.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `TestTrack2`, `TramSplit`, SunCalc dependency.
+- `Resources/params.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `TestTrack2`, `TramSplit`, SunCalc dependency.
 - `.swiftpm/xcode/ModelRailwayHardware/` held an older standalone copy of the hardware package, since merged into `Sources/ModelRailwayHardware/`. The folder is now empty, but the repo still tracks it as a submodule gitlink (mode 160000) with no `.gitmodules` entry, so `git submodule` commands fail. `git rm --cached .swiftpm/xcode/ModelRailwayHardware` removes the orphan entry.
 
 **Design observations**
-- Layout and train roster are compiled in (`Cellar`, `Trains`); moving them to JSON/MQTT config would allow changes without rebuilds.
+- Layouts are compiled in (`Cellar` etc.); moving them to JSON/MQTT config, as for the train roster, would allow changes without rebuilds.
 - No unit tests; the topology/path/signal logic is pure and would be easy to test with `TestTrack2`/`TramSplit`.
 - Signals are both polled (0.2 s) and force-refreshed on every `signalState()` read.
 - Stop timing uses `Task.sleep` inside `RouteOperator` (`checkForTrainStop`, `endRoute`; there is a TODO to replace this with a stop event). The actor stays reentrant during the sleep, so other events for the same train can be processed while it waits.
@@ -174,7 +174,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 ## 10. How to extend (quick guide)
 - **New layout**: subclass `Layout`, fill `blocks`, `points` (+ `setConnection`), block exits (`setExit`), `signals`, `sensors`, then call `buildLayout()`; add a case to `LayoutName` in `RailwayManager.swift` and select it with `-layout <name>`. Run to check `layoutIsValid()`.
-- **New train**: add a `TrainParams` entry to `TrainRoster.standard` in `Trains.swift` (id, name, DCC address, length in cm, `TrainSpeeds`, optional start functions).
+- **New train**: add an entry to the trains file (`~/.railwaymanager/trains.json`, or `Resources/trains.json` for the built-in roster, which needs a rebuild); see Roster in section 4.
 - **New event**: add a case to `LayoutEvent` (+ `description`, `isRouteEvent`), publish via `LayoutEventHub.shared.publish`, handle in `LayoutManager.processEvent`.
 - **New CBUS message**: add op code in `CBUSOpCodes.swift`, encoding in `CBUSManager.sendCBUSMessage`, decoding in `processReceivedMessage`.
 - **New MQTT command**: extend `RouteParams.RouteCommand` and the switch in `RailwayManager.monitorRouteRequests`.

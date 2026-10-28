@@ -27,6 +27,7 @@ enum TrainError: Error, Equatable {
     case trainAlreadyActive(Int)
     case unexpectedSensorEvent(String)
     case layoutError(String)
+    case trainRosterError(String)
     
     var isFatal: Bool {
         switch self {
@@ -49,6 +50,7 @@ enum TrainError: Error, Equatable {
         case .trainAlreadyActive:           false
         case .unexpectedSensorEvent:        false
         case .layoutError:                  false
+        case .trainRosterError:             true
         }
     }
 }
@@ -76,6 +78,7 @@ extension TrainError: CustomStringConvertible {
         case .trainAlreadyActive(let trainID):          "Train \(trainID) is already running a route"
         case .unexpectedSensorEvent(let message):       "Unexpected sensor event: \(message)"
         case .layoutError(let message):                 "Layout error: \(message)"
+        case .trainRosterError(let message):            "Train roster error: \(message)"
         }
     }
 }

@@ -81,6 +81,10 @@ struct RailwayManager: ParsableCommand {
             help: "Track layout to run (\(LayoutName.allCases.map(\.rawValue).joined(separator: ", ")))")
     var layoutName: LayoutName = .cellar
     
+    @Option(name: .customLong("trains", withSingleDash: true),
+            help: "Trains JSON file (default \(TrainRoster.defaultFileURL.path) if it exists, otherwise the built-in trains)")
+    var trainsPath: String?
+    
     func run() throws {
         // Apply the options before anything reads them
         GlobalOptions.noMQTT = noMQTT
@@ -102,7 +106,7 @@ struct RailwayManager: ParsableCommand {
             get async {
                 do {
                     let layout = layoutName.makeLayout()
-                    let trains = TrainRoster.standard
+                    let trains = try TrainRoster.load(path: trainsPath)
                     
                     // Start MQTT
                     try await MQTTManager.shared.connect()

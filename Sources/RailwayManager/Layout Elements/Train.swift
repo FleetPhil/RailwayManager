@@ -69,7 +69,7 @@ struct Train: Sendable, CustomStringConvertible {
         self.name = trainParams.name
         self.length = trainParams.length
         self.speeds = trainParams.speeds
-        self.startFunctions = trainParams.startFunctions
+        self.startFunctions = trainParams.startFunctions.filter(\.enabled)
         
         self.hardware = CBUSHardwareTrain(id: trainParams.id, address: trainParams.address)
     }
