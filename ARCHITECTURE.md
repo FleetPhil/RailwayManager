@@ -15,7 +15,7 @@ Package: `swift-tools-version 6.1`, Swift language mode 6, platforms macOS 15 / 
 
 Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global `log`), mqtt-nio, CollectionConcurrencyKit. SunCalc is declared but not used.
 
-~5,900 lines across 44 Swift files.
+~7,200 lines (about 5,000 of code, excluding comments and blank lines) across 51 Swift files.
 
 ## 2. Folder map
 
