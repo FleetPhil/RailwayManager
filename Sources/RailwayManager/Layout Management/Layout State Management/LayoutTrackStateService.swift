@@ -522,6 +522,22 @@ struct LayoutTrackSnapshot: Sendable {
     func travelDirection(in block: Block) -> BlockDirection? {
         blockState(block)?.direction
     }
+
+    // True if another train is in the way of the block route: its toBlock is reserved, occupied or vacating
+    // by another train or locked by one for the opposite direction, or one of its points is reserved by
+    // another train. The train's own blocks and points don't count. Used to find a path round other trains;
+    // reservePathItem() still makes the final check (including the blocks contiguous beyond toBlock).
+    func isBlocked(_ blockRoute: Layout.BlockRoute, for train: Train) -> Bool {
+        if let holder = blockStates[blockRoute.toBlock]?.train, holder != train {
+            return true
+        }
+        if directionLocks[blockRoute.toBlock]?.contains(where: { $0.train != train && $0.direction != blockRoute.toDirection }) == true {
+            return true
+        }
+        return blockRoute.pointSettings.contains(where: { setting in
+            reservedTrainForPoint(setting.point).map({ $0 != train }) ?? false
+        })
+    }
 }
 
     // Snapshot for read-only events, e.g. set signals, print status

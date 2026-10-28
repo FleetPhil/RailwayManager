@@ -398,10 +398,20 @@ actor RouteOperator {
     func handleFreedResource(_ trackResource: TrackResource) async throws {
         switch try await trainController.trainState(train) {
         case .stoppingForResource(let freedResource), .stoppedForResource(let freedResource, _):
-            if freedResource == trackResource, let frontItem {
+            if freedResource == trackResource, let waitingItem = frontItem {
                 log.verbose("\(rd): Have expected resource \(freedResource)")
                 
-                routeState = try await requestPathItem(frontItem)
+                // Work the item out again, as a path round other trains may now be clear.
+                // Nothing was reserved for the waiting item, so it can simply be replaced.
+                let item = try await pathItem(from: waitingItem.fromBlock, direction: waitingItem.fromDirection,
+                                              to: currentSegment.toBlock)
+                guard frontItem == waitingItem else { return }      // Moved on while finding the path
+                frontItem = item
+                if rearItems.last == waitingItem {
+                    rearItems[rearItems.count - 1] = item
+                }
+                
+                routeState = try await requestPathItem(item)
             }
 
         default:
@@ -472,7 +482,7 @@ actor RouteOperator {
          
     private func processNextFrontPathItem() async throws  {
         // Move to the next path item
-        guard let nextItem = try nextFrontPathItem() else {
+        guard let nextItem = try await nextFrontPathItem() else {
             routeState = .ending
             return      // No more
         }
@@ -506,27 +516,50 @@ actor RouteOperator {
     // Work out the next path item for the front of the train: the first item of the path from the
     // block the front is entering to the end of the segment, or at the end of a segment the first item
     // of the next segment. Nil at the end of the route.
-    private func nextFrontPathItem() throws -> PathItem? {
+    private func nextFrontPathItem() async throws -> PathItem? {
+        var segmentIndex = frontSegmentIndex
         let fromBlock: Block
         let direction: BlockDirection
-        if let frontItem, frontItem.toBlock != currentSegment.toBlock {
+        if let frontItem, frontItem.toBlock != route.segments[segmentIndex].toBlock {
             // Carry on along the segment
             fromBlock = frontItem.toBlock
             direction = frontItem.toDirection
         } else {
             if frontItem != nil {
                 // End of the segment: move on to the next one
-                guard currentSegmentIsLast == false else { return nil }
-                frontSegmentIndex += 1
+                guard segmentIndex + 1 < route.segments.count else { return nil }
+                segmentIndex += 1
             }
-            fromBlock = currentSegment.fromBlock
-            direction = currentSegment.direction
+            fromBlock = route.segments[segmentIndex].fromBlock
+            direction = route.segments[segmentIndex].direction
         }
-        
+
+        // Change the segment only after the path search, which awaits the track state
+        let item = try await pathItem(from: fromBlock, direction: direction, to: route.segments[segmentIndex].toBlock)
+        frontSegmentIndex = segmentIndex
+        return item
+    }
+
+    // The first item of a path from the block in the given direction to toBlock that keeps clear of
+    // other trains, or if there is none the shortest path (the train then waits for the resource)
+    private func pathItem(from fromBlock: Block, direction: BlockDirection, to toBlock: Block) async throws -> PathItem {
+        let snapshot = await stateService.snapshot()
+
         // path() throws if there is no route, so the path has at least one item
-        let path = try layout.path(fromBlock: fromBlock, toBlock: currentSegment.toBlock, direction: direction)
-        log.verbose("\(rd): Path to \(currentSegment.toBlock) is \(path.pathItems)")
-        return path.pathItems.first
+        let shortestPath = try layout.path(fromBlock: fromBlock, toBlock: toBlock, direction: direction)
+        let path: Path
+        if let clearPath = try? layout.path(fromBlock: fromBlock, toBlock: toBlock, direction: direction,
+                                            isBlocked: { snapshot.isBlocked($0, for: train) }) {
+            path = clearPath
+            if clearPath != shortestPath {
+                log.info("\(rd): Avoiding other trains: path to \(toBlock) is \(clearPath.pathItems) instead of \(shortestPath.pathItems)")
+            }
+        } else {
+            path = shortestPath
+            log.verbose("\(rd): No path to \(toBlock) clear of other trains, taking \(path.pathItems)")
+        }
+        log.verbose("\(rd): Path to \(toBlock) is \(path.pathItems)")
+        return path.pathItems[0]
     }
     
     private func requestPathItem(_ item: PathItem) async throws -> RouteState {
