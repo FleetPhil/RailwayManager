@@ -42,6 +42,14 @@ actor MQTTManager: Sendable {
         var message: String
     }
     
+    // Payload for the trains topic: one entry per train in the roster
+    struct TrainInfo: Codable {
+        var id: Int
+        var name: String
+        var address: Int        // DCC address
+        var length: Int         // cm
+    }
+    
     private var client: MQTTClient? = nil
     private var mqttState: MQTTState = .idle
     
@@ -50,6 +58,7 @@ actor MQTTManager: Sendable {
     private let layoutTopic = "/topology"
     private let routeTopic = "/route"
     private let resultTopic = "/result"
+    private let trainsTopic = "/trains"
 
     private init() {
         // Broker location is set from the command line options (or their env/default values)
@@ -153,6 +162,21 @@ actor MQTTManager: Sendable {
         } catch {
             handleJSONError(error)
             throw TrainError.applicationError("Failed to publish layout topology")
+        }
+    }
+    
+    // Publish the train roster, retained so that a viewer connecting later still receives it
+    func sendTrains(_ roster: TrainRoster) async throws {
+        do {
+            let trains = roster.trains.map { TrainInfo(id: $0.id, name: $0.name, address: $0.address, length: $0.length) }
+            let payload = try String(decoding: JSONEncoder().encode(trains), as: UTF8.self)
+            try await client?.publish(to: topic + trainsTopic,
+                                      payload: ByteBufferAllocator().buffer(string: payload),
+                                      qos: .atLeastOnce,
+                                      retain: true)
+        } catch {
+            handleJSONError(error)
+            throw TrainError.applicationError("Failed to publish train roster")
         }
     }
     

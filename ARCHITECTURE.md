@@ -59,7 +59,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
                                                 │                 ▼
                                              CBUSManager ◄── Signal/Point hardware
                                                 │
-                                        MQTTManager (telemetry, /railway/state, /railway/topology, /railway/result)
+                                        MQTTManager (telemetry, /railway/state, /railway/topology, /railway/trains, /railway/result)
 ```
 
 ### Concurrency model
@@ -136,7 +136,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - **CBUS** over CANUSB4 (auto-discovered by USB VID 0x04D8 / PID 0xF80C on macOS via IOKit, Linux via sysfs), 115200 baud, ASCII GridConnect frames `:S6FC0N<op><data>;`.
   - Out: DSPD (speed), DFNON/DFNOF (functions), RLOC/GLOC/KLOC/DKEEP (sessions), STOP, ARST, RDCC3 (DCC accessory packet for points), ASON2/ASOF (signals).
   - In: ASON1/ASOF1 (sensor set/unset with orientation), PLOC, ERR, STAT, ASOF3 (sensor statistics).
-- **MQTT** topics: `railway/state` (JSON `LayoutItemState`), `railway/topology` (block end-signals, signal locations, points; published retained at startup so a viewer such as RailState that connects later still receives it), `railway/route` (incoming `RouteParams`), `railway/result` (one reply per route request: JSON `RouteResult` `{success, routeID, trainID, message}`, message empty on success; sent by `sendRouteSuccess` / `sendRouteError`). Default broker `192.168.68.52:1883` (env `MQTT_HOST`/`MQTT_PORT` or CLI).
+- **MQTT** topics: `railway/state` (JSON `LayoutItemState`), `railway/topology` (block end-signals, signal locations, points; published retained at startup so a viewer such as RailState that connects later still receives it), `railway/trains` (the train roster as a JSON array of `TrainInfo` `{id, name, address, length}`, also published retained at startup), `railway/route` (incoming `RouteParams`), `railway/result` (one reply per route request: JSON `RouteResult` `{success, routeID, trainID, message}`, message empty on success; sent by `sendRouteSuccess` / `sendRouteError`). Default broker `192.168.68.52:1883` (env `MQTT_HOST`/`MQTT_PORT` or CLI).
 - **Console** (macOS): `sn<id>` / `ss<id>` simulate a north/south pulse on the sensor with that logical id (not its hardware address) followed 2s later by a pulse in the other orientation, `x` = shutdown (button 3), `st` = print status, `dp` = write every block route and every block-to-block path (both directions) to a timestamped file in the home directory (`Layout.topologyDump()`), for diffing topology changes, `rr <fromBlock> <toBlock> <f|r> [train]` = run a single-segment test route in the given block direction (route id 1, train id defaults to 1, `halt` wait at the end; a rejected route is logged).
 - **LEDs**: blue = dormant, green = running (slow flash = ending), red = error. No-op on macOS; elsewhere driven via `CBUSManager.setLED` (currently an empty stub).
 
