@@ -13,16 +13,11 @@ extension RailwayManager {
     // enters C travelling reverse), halt, then C to S reverse (via B, point 1 straight and A).
     // The train stays DCC forward throughout and ends in S facing the other way.
     static func testLoopRoute(layout: Layout) throws -> Route {
-        let path1 = try layout.path(fromBlock: layout.block("S"),
-                                    toBlock: layout.block("C"),
-                                    direction: .forward)
-        let segment1 = Segment(path: path1, waitTime: .halt)
-        let path2 = try layout.path(fromBlock: layout.block("C"),
-                                    toBlock: layout.block("S"),
-                                    direction: .reverse)
-        let segment2 = Segment(path: path2, waitTime: .station)
+        let segment1 = Segment(fromBlock: layout.block("S"), toBlock: layout.block("C"), direction: .forward, waitTime: .halt)
+        let segment2 = Segment(fromBlock: layout.block("C"), toBlock: layout.block("S"), direction: .reverse, waitTime: .station)
         
         let route = Route(id: 1, segments: [segment1, segment2])
+        try route.validate(in: layout)
         
         log.verbose("Route is \(route.path)")
         
@@ -30,16 +25,11 @@ extension RailwayManager {
     }
 
     static func testLoop2Route(layout: Layout) throws -> Route {
-        let path1 = try layout.path(fromBlock: layout.block("S1"),
-                                    toBlock: layout.block("S2"),
-                                    direction: .forward)
-        let segment1 = Segment(path: path1, waitTime: .halt)
-        let path2 = try layout.path(fromBlock: layout.block("S2"),
-                                    toBlock: layout.block("S1"),
-                                    direction: .forward)
-        let segment2 = Segment(path: path2, waitTime: .station)
+        let segment1 = Segment(fromBlock: layout.block("S1"), toBlock: layout.block("S2"), direction: .forward, waitTime: .halt)
+        let segment2 = Segment(fromBlock: layout.block("S2"), toBlock: layout.block("S1"), direction: .forward, waitTime: .station)
 
         let route = Route(id: 1, segments: [segment1, segment2])
+        try route.validate(in: layout)
         
         log.verbose("Route is \(route.path)")
         

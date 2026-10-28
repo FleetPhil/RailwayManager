@@ -252,24 +252,21 @@ struct RailwayManager: ParsableCommand {
             throw TrainError.applicationError("Unknown train \(routeParams.trainID) for route \(routeParams.routeID)")
         }
         
-        guard routeParams.segments.isEmpty == false else {
-            throw TrainError.invalidRoute("Route \(routeParams.routeID) invalid: no segments")
-        }
-        
         var segments: [Segment] = []
         for segmentParams in routeParams.segments {
             guard layout.hasBlock(segmentParams.fromBlock), layout.hasBlock(segmentParams.toBlock) else {
                 throw TrainError.invalidPath("Unknown block in segment \(segmentParams.fromBlock)-\(segmentParams.toBlock) of route \(routeParams.routeID)")
             }
-            
-            // path() throws if the blocks are not connected in the given direction
-            let path = try layout.path(fromBlock: layout.block(segmentParams.fromBlock),
-                                       toBlock: layout.block(segmentParams.toBlock),
-                                       direction: segmentParams.direction)
-            segments.append(Segment(path: path, waitTime: segmentParams.waitTime))
+            segments.append(Segment(fromBlock: layout.block(segmentParams.fromBlock),
+                                    toBlock: layout.block(segmentParams.toBlock),
+                                    direction: segmentParams.direction,
+                                    waitTime: segmentParams.waitTime))
         }
         
         let route = Route(id: routeParams.routeID, segments: segments, initialDCCDirection: routeParams.initialDCCDirection)
+        
+        // Throws if there are no segments, they don't join up, or a segment's blocks are not connected in its direction
+        try route.validate(in: layout)
         
         log.verbose("Route is: \(route.path)")
         

@@ -24,11 +24,6 @@ enum RouteState: Equatable {
     }
 }
 
-struct ItemIndex {
-    var segmentIndex: Int
-    var pathItemIndex: Int
-}
-
 actor RouteOperator {
     let train: Train            // RouteOperator : Train is 1:1 mapping
     var route: Route
@@ -48,8 +43,13 @@ actor RouteOperator {
     // Train state
     private var lastCommandedTrainSpeed: TrainSpeed = .stop
     
-    // The current session and path for this route being processed by the front and rear of the train
-    private var currentItemIndex: [ TrainSensor : ItemIndex ] = [:]
+    // The segment the front of the train is on, and the path item it is on (nil before the route starts).
+    // Each path item is worked out as the front reaches the block before it.
+    private var frontSegmentIndex: Int = 0
+    private var frontItem: PathItem? = nil
+    // The path items the front has moved on to that the rear has not yet cleared, oldest first:
+    // the rear of the train is on the first
+    private var rearItems: [PathItem] = []
     
     var rd: String {
         "R\(train.id)"
@@ -67,35 +67,23 @@ actor RouteOperator {
         self.stateService = stateService
         self.trainController = trainController
         
-        guard let routeDirection = route.segments.first?.path.direction else {
+        guard let routeDirection = route.segments.first?.direction else {
             throw TrainError.noTrainDirection(train.id)
         }
         try await trainController.setTrainDirection(train, direction: routeDirection)
-        
-        currentItemIndex[.front] = ItemIndex(segmentIndex: 0, pathItemIndex: 0)
-        currentItemIndex[.rear] = ItemIndex(segmentIndex: 0, pathItemIndex: 0)
     }
     
     // MARK: - Current position accessors
-    private func currentSegment(_ position: TrainSensor) -> Segment {
-        route.segments[currentItemIndex[position]!.segmentIndex]
+    private var currentSegment: Segment {
+        route.segments[frontSegmentIndex]
     }
     
-    private func currentSegmentIsLast(_ position: TrainSensor) -> Bool {
-        currentItemIndex[position]!.segmentIndex == route.segments.count - 1
+    private var currentSegmentIsLast: Bool {
+        frontSegmentIndex == route.segments.count - 1
     }
     
     private var currentWaitTime: WaitTime? {
-        currentSegment(.front).waitTime
-    }
-    
-    func currentPathItem(_ position: TrainSensor) -> PathItem {
-        // Clamp the placeholder start index (-1) to the first item
-        currentSegment(position).path.pathItems[max(currentItemIndex[position]!.pathItemIndex, 0)]
-    }
-
-    var isFirstPathItem: Bool {
-        return currentItemIndex[.front]!.pathItemIndex == -1
+        currentSegment.waitTime
     }
     
     // MARK: - Route lifecycle
@@ -118,9 +106,10 @@ actor RouteOperator {
         try await stateService.setStateForTrain(train, state: .idle(route.startBlock))
         try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, route.initialDirection))
         
-        // Will be incremented at route start
-        currentItemIndex[.front] = ItemIndex(segmentIndex: 0, pathItemIndex: -1)
-        currentItemIndex[.rear]  = ItemIndex(segmentIndex: 0, pathItemIndex: 0)
+        // The first path item is worked out at route start
+        frontSegmentIndex = 0
+        frontItem = nil
+        rearItems = []
 
         try await LayoutEventHub.shared.publish(.didOccupyBlock(route.startBlock, train))
 
@@ -277,26 +266,28 @@ actor RouteOperator {
         // MARK: Sensor set scenarios
         switch trainSensor {
         case .front:
-            if isStartOfBlock && sensor.block == currentPathItem(.front).toBlock {
+            guard let frontItem else { break }      // Route not started
+            if isStartOfBlock && sensor.block == frontItem.toBlock {
                 // Start of the next block in the path
                 try await processOccupiedRouteBlock()
-            } else if sensor.block == currentPathItem(.front).toBlock {
+            } else if sensor.block == frontItem.toBlock {
                 // Sensor is at the front of the train in the to block but after the start of block sensor
                 try await checkForTrainStop(sensor)
-            } else if isEndOfBlock && sensor.block == currentPathItem(.front).fromBlock {
+            } else if isEndOfBlock && sensor.block == frontItem.fromBlock {
                 // Sensor is at the front of the train at the end of the from block
                 // Path has not incremented forward so likely this is because of a resource conflict
                 // check if the train should stop
-                try await handleFrontAtFromBlockEnd(sensor, pathItem: currentPathItem(.front))
+                try await handleFrontAtFromBlockEnd(sensor, pathItem: frontItem)
             }
             
         case .rear:
-            if isStartOfBlock && sensor.block == currentPathItem(.rear).toBlock {
+            guard let rearItem = rearItems.first else { break }     // Rear has cleared every item so far
+            if isStartOfBlock && sensor.block == rearItem.toBlock {
                 // Sensor at the back of the train is at the start of the to block in the current path
                 // So train is clear of the previous block and any turnouts etc
                 // There could be more than 1 vacating block, only vacate the one where the sensor is
                 
-                try await processVacatedBlock(train: train, block: currentPathItem(.rear).fromBlock)
+                try await processVacatedBlock(train: train, block: rearItem.fromBlock)
             }
         }
     }
@@ -390,7 +381,7 @@ actor RouteOperator {
         case .stoppingForResource(let trackResource):
             // Stop and wait as this is the end of a block
             try await stopTrain()
-            try await setTrainState(.stoppedForResource(trackResource, currentPathItem(.front)))
+            try await setTrainState(.stoppedForResource(trackResource, pathItem))
             
         case .stoppingAtSensor(let stopSensor, _) where sensor == stopSensor:
             try await stopTrain()
@@ -407,10 +398,10 @@ actor RouteOperator {
     func handleFreedResource(_ trackResource: TrackResource) async throws {
         switch try await trainController.trainState(train) {
         case .stoppingForResource(let freedResource), .stoppedForResource(let freedResource, _):
-            if freedResource == trackResource {
+            if freedResource == trackResource, let frontItem {
                 log.verbose("\(rd): Have expected resource \(freedResource)")
                 
-                routeState = try await requestPathItem(currentPathItem(.front))
+                routeState = try await requestPathItem(frontItem)
             }
 
         default:
@@ -423,26 +414,26 @@ actor RouteOperator {
     // The train has occupied the toBlock on the current path item
     private func processOccupiedRouteBlock() async throws {
         
-        // If this is the placeholder first item just execute the first command
-        if isFirstPathItem {
-            try await setTrainSpeed(inBlock: currentPathItem(.front).fromBlock)
+        // At route start there is no path item yet: just execute the first command
+        guard let frontItem else {
+            try await setTrainSpeed(inBlock: route.startBlock)
             try await processNextFrontPathItem()
             return
         }
         
         // Set the state on the vacating block and the occupied block
-        try await stateService.setStateForBlock(currentPathItem(.front).fromBlock, newState: .vacating(train, currentPathItem(.front).fromDirection))
-        try await stateService.setStateForBlock(currentPathItem(.front).toBlock, newState: .occupied(train, currentPathItem(.front).toDirection))
+        try await stateService.setStateForBlock(frontItem.fromBlock, newState: .vacating(train, frontItem.fromDirection))
+        try await stateService.setStateForBlock(frontItem.toBlock, newState: .occupied(train, frontItem.toDirection))
         
         // Crossing a loop closure flips the block orientation: the train's travel direction and facing
         // both change, so the DCC direction (and front/rear sensor detection) stays the same
-        if currentPathItem(.front).fromDirection != currentPathItem(.front).toDirection {
+        if frontItem.fromDirection != frontItem.toDirection {
             try await trainController.crossOrientationChange(train)
         }
         
         // Check if we are stopping in this block, if not just carry on
-        // We are stopping if this is the last pathItem in the segment and a wait time has been defined
-        guard currentPathItem(.front).role.isLast, let waitTime = currentWaitTime else {
+        // We are stopping if this is the end of the segment and a wait time has been defined
+        guard frontItem.toBlock == currentSegment.toBlock, let waitTime = currentWaitTime else {
             try await processNextFrontPathItem()
             return
         }
@@ -453,26 +444,26 @@ actor RouteOperator {
         // If there is a station sensor in the block use that, otherwise use the end sensor
         var stopSensor: Sensor {
             get throws {
-                if let stationSensor = layout.stationSensorForBlock(currentPathItem(.front).toBlock) {
+                if let stationSensor = layout.stationSensorForBlock(frontItem.toBlock) {
                     return stationSensor
                 } else {
                     // The train stops at the end of toBlock in the direction it enters it
-                    let toDirection = currentPathItem(.front).toDirection
-                    guard let endSensor = layout.sensorForBlock(currentPathItem(.front).toBlock, atBlockStart: false, inDirection: toDirection) else {
-                        throw TrainError.applicationError("No end sensor for block \(currentPathItem(.front).toBlock), \(toDirection)")
+                    let toDirection = frontItem.toDirection
+                    guard let endSensor = layout.sensorForBlock(frontItem.toBlock, atBlockStart: false, inDirection: toDirection) else {
+                        throw TrainError.applicationError("No end sensor for block \(frontItem.toBlock), \(toDirection)")
                     }
                     return endSensor
                 }
             }
         }
         
-        log.verbose("Train \(train) will stop at \(try! stopSensor) in block \(currentPathItem(.front).toBlock)")
+        log.verbose("Train \(train) will stop at \(try! stopSensor) in block \(frontItem.toBlock)")
         
         try await setTrainState(.stoppingForTimer(stopSensor, waitTime))
-        try await setTrainSpeed(inBlock: currentPathItem(.front).toBlock)
+        try await setTrainSpeed(inBlock: frontItem.toBlock)
         
         // If this is also the last segment set the route state
-        if currentSegmentIsLast(.front) {
+        if currentSegmentIsLast {
             routeState = .ending
         }
         
@@ -481,36 +472,61 @@ actor RouteOperator {
          
     private func processNextFrontPathItem() async throws  {
         // Move to the next path item
-        if let nextIndex = nextPathItemIndex(.front) {
-            currentItemIndex[.front] = nextIndex
-            
-            // Check for change in direction: a new segment starting in the opposite direction to the
-            // train's travel direction in its current block reverses the train, which reverses its
-            // travel direction in every block it holds. Within a segment the next item always starts
-            // in the train's direction (a loop closure is handled when the front crosses it).
-            let newDirection = currentPathItem(.front).fromDirection
-            if try await trainController.trainDirection(train) != newDirection {
-                try await trainController.setTrainDirection(train, direction: newDirection)
-                await stateService.reverseTravelDirection(of: train)
-            }
-        } else {
+        guard let nextItem = try nextFrontPathItem() else {
             routeState = .ending
             return      // No more
         }
+        frontItem = nextItem
+        rearItems.append(nextItem)
+        
+        // Check for change in direction: a new segment starting in the opposite direction to the
+        // train's travel direction in its current block reverses the train, which reverses its
+        // travel direction in every block it holds. Within a segment the next item always starts
+        // in the train's direction (a loop closure is handled when the front crosses it).
+        if try await trainController.trainDirection(train) != nextItem.fromDirection {
+            try await trainController.setTrainDirection(train, direction: nextItem.fromDirection)
+            await stateService.reverseTravelDirection(of: train)
+        }
 
         // Allocate resources to the next block
-        if let blockingResource = try await reserveOrRun(currentPathItem(.front)) {
+        if let blockingResource = try await reserveOrRun(nextItem) {
             try await stateService.setStateForTrain(train, state: .stoppingForResource(blockingResource))
         } else {
             // Set the points on this path without default values
-            for setting in currentPathItem(.front).pointSettings where setting.point.defaultPosition == nil {
+            for setting in nextItem.pointSettings where setting.point.defaultPosition == nil {
                 // Don't override default positions e.g. on virtual back/back points
                 try await stateService.setDirectionForPoint(setting.point, newDirection: setting.direction)
             }
         }
         
         // Set the speed for the new block
-        try await setTrainSpeed(inBlock: currentPathItem(.front).fromBlock)
+        try await setTrainSpeed(inBlock: nextItem.fromBlock)
+    }
+    
+    // Work out the next path item for the front of the train: the first item of the path from the
+    // block the front is entering to the end of the segment, or at the end of a segment the first item
+    // of the next segment. Nil at the end of the route.
+    private func nextFrontPathItem() throws -> PathItem? {
+        let fromBlock: Block
+        let direction: BlockDirection
+        if let frontItem, frontItem.toBlock != currentSegment.toBlock {
+            // Carry on along the segment
+            fromBlock = frontItem.toBlock
+            direction = frontItem.toDirection
+        } else {
+            if frontItem != nil {
+                // End of the segment: move on to the next one
+                guard currentSegmentIsLast == false else { return nil }
+                frontSegmentIndex += 1
+            }
+            fromBlock = currentSegment.fromBlock
+            direction = currentSegment.direction
+        }
+        
+        // path() throws if there is no route, so the path has at least one item
+        let path = try layout.path(fromBlock: fromBlock, toBlock: currentSegment.toBlock, direction: direction)
+        log.verbose("\(rd): Path to \(currentSegment.toBlock) is \(path.pathItems)")
+        return path.pathItems.first
     }
     
     private func requestPathItem(_ item: PathItem) async throws -> RouteState {
@@ -542,22 +558,6 @@ actor RouteOperator {
         return nil
     }
     
-    private func nextPathItemIndex(_ trainSensor: TrainSensor) -> ItemIndex? {
-        var newIndex = ItemIndex(
-            segmentIndex: currentItemIndex[trainSensor]!.segmentIndex, pathItemIndex: currentItemIndex[trainSensor]!.pathItemIndex)
-        newIndex.pathItemIndex += 1
-        if newIndex.pathItemIndex == currentSegment(trainSensor).path.pathItems.count {
-            // Reached the end of the path items for this segment
-            newIndex.segmentIndex += 1
-            newIndex.pathItemIndex = 0
-            if newIndex.segmentIndex == route.segments.count {
-                // No more segments
-                return nil
-            }
-        }
-        return newIndex
-    }
-    
     // The train has exited the toBlock on the rear path item
     private func processVacatedBlock(train: Train, block: Block) async throws {
         guard try await stateService.trainForBlock(block) == train else {
@@ -570,9 +570,8 @@ actor RouteOperator {
         
         // Free any
         
-        if let newIndex = nextPathItemIndex(.rear) {
-            currentItemIndex[.rear] = newIndex
-        }
+        // The rear moves on to the next path item
+        rearItems.removeFirst()
     }
         
     // Return if valid or throw if not

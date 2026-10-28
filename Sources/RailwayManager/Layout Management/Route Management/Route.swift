@@ -24,7 +24,7 @@ struct Route: CustomStringConvertible, Sendable {
         
     var startBlock: Block  {
         get throws {
-            if let startBlock = segments.first?.path.pathItems.first?.fromBlock {
+            if let startBlock = segments.first?.fromBlock {
                 return startBlock
             } else {
                 throw TrainError.noStartBlockForRoute(id)
@@ -34,7 +34,7 @@ struct Route: CustomStringConvertible, Sendable {
     
     // The direction for the first segment in the route
     var initialDirection: BlockDirection {
-        return segments.first?.path.direction ?? .forward
+        return segments.first?.direction ?? .forward
     }
 
     nonisolated var description: String {
@@ -42,7 +42,7 @@ struct Route: CustomStringConvertible, Sendable {
     }
     
     nonisolated var path: String {
-        return "\(id): \(segments.map({ $0.path }))"
+        return "\(id): \(segments)"
     }
     
 
@@ -50,18 +50,32 @@ struct Route: CustomStringConvertible, Sendable {
 
 // MARK: Loop check
 extension Route {
-    // The blocks the front of the train enters, in order, split into stretches at each reversal
-    // (a segment that starts in the opposite direction to the one the train arrived in)
-    var blockStretches: [[Block]] {
+    // Check the route can be run on the layout: each segment starts where the previous one ended,
+    // and there is a path for it (ignoring other trains). Throws if not.
+    func validate(in layout: Layout) throws {
+        guard segments.isEmpty == false else {
+            throw TrainError.invalidRoute("Route \(id) invalid: no segments")
+        }
+        for (previous, segment) in zip(segments, segments.dropFirst()) where segment.fromBlock != previous.toBlock {
+            throw TrainError.invalidRoute("Route \(id) invalid: segment \(segment) does not start where \(previous) ends")
+        }
+        for segment in segments {
+            _ = try segment.nominalPath(in: layout)
+        }
+    }
+    
+    // The blocks the front of the train enters on the segments' nominal paths, in order, split into
+    // stretches at each reversal (a segment that starts in the opposite direction to the one the train arrived in)
+    func blockStretches(in layout: Layout) throws -> [[Block]] {
         var stretches: [[Block]] = []
         var arrivalDirection: BlockDirection?
         for segment in segments {
-            guard let firstItem = segment.path.pathItems.first else { continue }
-            if stretches.isEmpty || firstItem.fromDirection != arrivalDirection {
-                stretches.append([firstItem.fromBlock])     // New stretch: route start or reversal
+            let pathItems = try segment.nominalPath(in: layout).pathItems
+            if stretches.isEmpty || segment.direction != arrivalDirection {
+                stretches.append([segment.fromBlock])       // New stretch: route start or reversal
             }
-            stretches[stretches.count - 1] += segment.path.pathItems.map(\.toBlock)
-            arrivalDirection = segment.path.pathItems.last?.toDirection
+            stretches[stretches.count - 1] += pathItems.map(\.toBlock)
+            arrivalDirection = pathItems.last?.toDirection
         }
         return stretches
     }
@@ -69,9 +83,10 @@ extension Route {
     // Within a stretch, a block the train enters twice means it has gone round a loop (or a circuit).
     // The blocks in between must hold the whole train, otherwise its front comes back to the block
     // while its rear is still there, and the train stops waiting for itself.
+    // Uses the nominal paths: a different path taken at runtime to avoid other trains is not checked.
     // Throws if they are too short; warns and skips the check if any length is not known.
-    func checkLoopLengths(for train: Train) throws {
-        for stretch in blockStretches {
+    func checkLoopLengths(for train: Train, in layout: Layout) throws {
+        for stretch in try blockStretches(in: layout) {
             for (index, block) in stretch.enumerated() {
                 guard let previousIndex = stretch[..<index].lastIndex(of: block) else { continue }
                 let loopBlocks = stretch[(previousIndex + 1)..<index]

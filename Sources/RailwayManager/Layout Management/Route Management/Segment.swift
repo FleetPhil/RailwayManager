@@ -56,15 +56,29 @@ extension WaitTime: Codable {
     }
 }
 
-// A segment is a runtime wrapper for a path indicating any runtime parameters
+// A segment of a route: from one block to another, starting in the given direction in fromBlock.
+// The path between them is worked out as the train runs (RouteOperator), so it can avoid other trains.
 
-struct Segment: Sendable {
-    let path: Path              // Path inc direction
-    let waitTime: WaitTime?     // No stop if null
-    
-    init(path: Path, waitTime: WaitTime?) {
-        self.path = path
+struct Segment: Sendable, CustomStringConvertible {
+    let fromBlock: Block
+    let toBlock: Block
+    let direction: BlockDirection   // Travel direction in fromBlock
+    let waitTime: WaitTime?         // No stop if null
+
+    init(fromBlock: Block, toBlock: Block, direction: BlockDirection, waitTime: WaitTime?) {
+        self.fromBlock = fromBlock
+        self.toBlock = toBlock
+        self.direction = direction
         self.waitTime = waitTime
+    }
+
+    // The shortest path for the segment ignoring other trains; throws if there is none
+    func nominalPath(in layout: Layout) throws -> Path {
+        try layout.path(fromBlock: fromBlock, toBlock: toBlock, direction: direction)
+    }
+
+    var description: String {
+        "\(fromBlock)-\(toBlock) \(direction)"
     }
 }
 
