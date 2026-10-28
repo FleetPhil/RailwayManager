@@ -13,7 +13,7 @@ A Swift 6 command-line controller for a model railway (the "Cellar" layout). It:
 
 Package: `swift-tools-version 6.1`, Swift language mode 6, platforms macOS 15 / iOS 16 (Linux code paths also exist). Single executable target `RailwayManager`.
 
-Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global `log`), mqtt-nio, CollectionConcurrencyKit. SunCalc and SwiftGraph are declared but not used.
+Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global `log`), mqtt-nio, CollectionConcurrencyKit. SunCalc is declared but not used.
 
 ~5,900 lines across 44 Swift files.
 
@@ -24,7 +24,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 | `Managers/` | `RailwayManager` (@main, CLI, startup, MQTT route intake, console commands), `LayoutManager` (actor – central event loop, layout lifecycle), `RouteOperator` (actor – one per train, executes a route) |
 | `Layout Elements/` | Static topology model: `Layout` base class, `Block`, `Point`, `Signal`, `Sensor`, `BlockDirection` |
 | `Layout Management/Route Management/` | `Route`, `Segment` (+ `WaitTime`), `TrackResource`, `LayoutRoute.swift` (graph building, `Layout.path()`, `layoutIsValid()`) |
-| `Layout Management/Path/` | `Path`, `PathItem`, `PathItemRole` |
+| `Layout Management/Path/` | `Path`, `PathItem` |
 | `Layout Management/Layout State Management/` | `LayoutEvent` + `LayoutEventHub`, `LayoutTrackStateService` (actor – all mutable track state), `LayoutTrackSnapshot` |
 | `Layout Management/Signals/` | `SignalTrackState` (per-signal aspect logic), `SignalCoordinator` (whole-layout refresh, distant & diverging aspects) |
 | `Layout Management/Train control/` | `LayoutTrainController` (actor – train state/direction, DCC commands), `DCCSessionStore`, `TrainRuntimeState` |
@@ -89,7 +89,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 ### Derived at `buildLayout()`
 - `blockRoutes` – every legal block→block transition per direction with the point settings required, found by `makeBlockRoutes()` walking point chains (facing → both legs, trailing → single). Each route also records `toDirection`, the travel direction on entering `toBlock`, derived by `Block.entryDirection(through:)` from which of `toBlock`'s own exits the connection arrives through (arriving via its forward exit = travelling reverse). It differs from `direction` only across a loop closure; `BlockRoute.description` shows it (`-> dir`) only then.
-- `Layout.path(from:to:direction:)` – BFS shortest path over (block, travel direction) vertices, with each block route an edge from `fromBlock`/`direction` to `toBlock`/`toDirection` (edges tried in `blockRoutes` order), from the start block in the given direction to the target block in either direction → `Path` (starting direction) of `PathItem`s (from, to, fromDirection, toDirection, role, pointSettings). The directions differ only across a loop closure. `path(from:to:direction:isBlocked:)` is the same search skipping any block route for which `isBlocked` returns true.
+- `Layout.path(from:to:direction:)` – BFS shortest path over (block, travel direction) vertices, with each block route an edge from `fromBlock`/`direction` to `toBlock`/`toDirection` (edges tried in `blockRoutes` order), from the start block in the given direction to the target block in either direction → `Path` (starting direction) of `PathItem`s (from, to, fromDirection, toDirection, pointSettings). The directions differ only across a loop closure. `path(from:to:direction:isBlocked:)` is the same search skipping any block route for which `isBlocked` returns true.
 - `layoutIsValid()` – logs "Layout <name> is valid" on success; consistency checks (exits, point connections symmetric, every block→block link and point→block leg matched by exactly one exit on the receiving block, each signal's indication equal to its block's exit in the signal's direction, plus a non-fatal warning for any block exit that leads on without a signal, signals/sensors reference known items, no non-zero hardware address shared by two sensors, by two signals or by two points (0 is a placeholder and may repeat), no duplicate point settings). Failure is fatal at startup.
 
 ### Routes
@@ -161,7 +161,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Several signals/sensors in `Cellar` have address 0 (not wired yet); station sensors for H/J commented out.
 
 **Dead / legacy code**
-- `Resources/params.json`, `trainParams.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `PathItem.role` / `PathItemRole` (set by `path()`, no longer read), `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `Layout.trains` / `Layout.train(_:)`, `TestTrack2`, `TramSplit`, SunCalc and SwiftGraph dependencies.
+- `Resources/params.json`, `trainParams.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `Layout.trains` / `Layout.train(_:)`, `TestTrack2`, `TramSplit`, SunCalc dependency.
 - `.swiftpm/xcode/ModelRailwayHardware/` held an older standalone copy of the hardware package, since merged into `Sources/ModelRailwayHardware/`. The folder is now empty, but the repo still tracks it as a submodule gitlink (mode 160000) with no `.gitmodules` entry, so `git submodule` commands fail. `git rm --cached .swiftpm/xcode/ModelRailwayHardware` removes the orphan entry.
 
 **Design observations**

@@ -101,15 +101,6 @@
       }
     },
     {
-      "identity" : "swiftgraph",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/davecom/SwiftGraph.git",
-      "state" : {
-        "branch" : "master",
-        "revision" : "6c5fb8828d056de4c9f922662748589ede201eff"
-      }
-    },
-    {
       "identity" : "swiftserial",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mredig/SwiftSerial",

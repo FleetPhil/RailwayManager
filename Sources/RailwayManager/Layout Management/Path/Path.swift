@@ -14,33 +14,11 @@ struct Path: Equatable {
     let pathItems: [PathItem]
 }
 
-enum PathItemRole {
-    case only
-    case first
-    case last
-    case intermediate
-    
-    var isFirst: Bool {
-        switch self {
-        case .only, .first:     return true
-        default:                return false
-        }
-    }
-    var isLast: Bool {
-        switch self {
-        case .only, .last:      return true
-        default:                return false
-        }
-    }
-
-}
-
 struct PathItem: Equatable, CustomStringConvertible, Sendable {
     let fromBlock: Block
     let toBlock: Block
     let fromDirection: BlockDirection       // Travel direction in fromBlock
     let toDirection: BlockDirection         // Travel direction on entering toBlock
-    let role: PathItemRole
     let pointSettings: [PointSetting]       // Might be more than 1 if back to back points
     
     var description: String {
@@ -50,6 +28,6 @@ struct PathItem: Equatable, CustomStringConvertible, Sendable {
     
     static func initialPathItemForBlock(_ block: Block, direction: BlockDirection) -> PathItem {
         return PathItem(fromBlock: block, toBlock: block, fromDirection: direction, toDirection: direction,
-                        role: .first, pointSettings: [])
+                        pointSettings: [])
     }
 }

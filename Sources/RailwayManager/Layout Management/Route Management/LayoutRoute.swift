@@ -64,19 +64,12 @@ extension Layout {
             vertex = Vertex(block: blockRoute.fromBlock, direction: blockRoute.direction)
         }
 
-        let pathItems = blockRoutesOnPath.enumerated().map({ index, blockRoute in
-            var role: PathItemRole {
-                if blockRoutesOnPath.count == 1 { return .only }       // Start and end only
-                if index == 0 { return .first }
-                if index + 1 == blockRoutesOnPath.count { return .last }
-                return .intermediate
-            }
-            return PathItem(fromBlock: blockRoute.fromBlock,
-                            toBlock: blockRoute.toBlock,
-                            fromDirection: blockRoute.direction,
-                            toDirection: blockRoute.toDirection,
-                            role: role,
-                            pointSettings: blockRoute.pointSettings)
+        let pathItems = blockRoutesOnPath.map({ blockRoute in
+            PathItem(fromBlock: blockRoute.fromBlock,
+                     toBlock: blockRoute.toBlock,
+                     fromDirection: blockRoute.direction,
+                     toDirection: blockRoute.toDirection,
+                     pointSettings: blockRoute.pointSettings)
         })
 
 //        log.verbose("Path is \(pathItems)")
