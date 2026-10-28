@@ -48,6 +48,20 @@ struct Trains {
             [
             ]
         }
+        let train3ID = 3
+        var train3Speeds: [ TrainSpeed : TrainSpeedSetting ] {
+            [
+                .stop :     TrainSpeedSetting(power: 0, speed: 0),
+                .slow :     TrainSpeedSetting(power: 25, speed: 12),
+                .normal :   TrainSpeedSetting(power: 40, speed: 20),
+                .fast :     TrainSpeedSetting(power: 60, speed: 40),
+            ]
+        }
+        
+        var train3StartFunctions: [TrainStartFunction] {
+            [
+            ]
+        }
 
         return [
             TrainParams(id: sbbTrainID,
@@ -60,7 +74,13 @@ struct Trains {
                         address: 22,
                         length: 26,
                         trainSpeeds: bernSpeeds,
-                        startFunctions: bernStartFunctions)
+                        startFunctions: bernStartFunctions),
+            TrainParams(id: train3ID,
+                        name: "Train 3",
+                        address: 23,
+                        length: 26,
+                        trainSpeeds: train3Speeds,
+                        startFunctions: train3StartFunctions)
         ]
     }
 
