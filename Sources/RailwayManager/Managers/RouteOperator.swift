@@ -424,9 +424,9 @@ actor RouteOperator {
     // The train has occupied the toBlock on the current path item
     private func processOccupiedRouteBlock() async throws {
         
-        // At route start there is no path item yet: just execute the first command
+        // At route start there is no path item yet: just execute the first command.
+        // The train is stationary and only moves off once the first path item is reserved
         guard let frontItem else {
-            try await setTrainSpeed(inBlock: route.startBlock)
             try await processNextFrontPathItem()
             return
         }
@@ -481,6 +481,8 @@ actor RouteOperator {
     }
          
     private func processNextFrontPathItem() async throws  {
+        let isRouteStart = frontItem == nil
+        
         // Move to the next path item
         guard let nextItem = try await nextFrontPathItem() else {
             routeState = .ending
@@ -500,6 +502,13 @@ actor RouteOperator {
 
         // Allocate resources to the next block
         if let blockingResource = try await reserveOrRun(nextItem) {
+            if isRouteStart {
+                // Stationary at the route start, possibly already past the end of block sensor, so it
+                // would not see it to stop at: stay stopped until the resource is freed
+                try await stopTrain()
+                try await setTrainState(.stoppedForResource(blockingResource, nextItem))
+                return
+            }
             try await stateService.setStateForTrain(train, state: .stoppingForResource(blockingResource))
         } else {
             // Set the points on this path without default values
