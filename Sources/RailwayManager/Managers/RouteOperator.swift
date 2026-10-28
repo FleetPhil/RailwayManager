@@ -482,6 +482,7 @@ actor RouteOperator {
          
     private func processNextFrontPathItem() async throws  {
         let isRouteStart = frontItem == nil
+        let trainState = try await trainController.trainState(train)
         
         // Move to the next path item
         guard let nextItem = try await nextFrontPathItem() else {
@@ -502,9 +503,18 @@ actor RouteOperator {
 
         // Allocate resources to the next block
         if let blockingResource = try await reserveOrRun(nextItem) {
-            if isRouteStart {
-                // Stationary at the route start, possibly already past the end of block sensor, so it
-                // would not see it to stop at: stay stopped until the resource is freed
+            // A stationary train that may already be at or past its end of block sensor would not see it to
+            // stop at: at the route start, or stopped at the sensor that is the end of the block in the
+            // direction it now leaves (after a reversal the end is the other end, which it will reach).
+            // Stay stopped until the resource is freed
+            var isPastEndSensor: Bool {
+                if isRouteStart { return true }
+                if case .stoppedAtSensor(let sensor) = trainState {
+                    return sensor.block == nextItem.fromBlock && sensor.location.isEnd(nextItem.fromDirection)
+                }
+                return false
+            }
+            if isPastEndSensor {
                 try await stopTrain()
                 try await setTrainState(.stoppedForResource(blockingResource, nextItem))
                 return
