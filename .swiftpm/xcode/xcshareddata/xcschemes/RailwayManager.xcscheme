@@ -58,6 +58,10 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-layout Xmas26"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-layout XmasFlat"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
