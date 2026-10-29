@@ -193,6 +193,15 @@ class Xmas26Flat: Layout, @unchecked Sendable {
 
         ]
         initialTrainBlocks = [1: block("D")]
+        
+        // Parallel platforms: a train may stop in either; A can stand in for B but not B for A
+        alternativeEndBlocks = [
+            block("F"): [block("G")],
+            block("G"): [block("F")],
+            block("C"): [block("D")],
+            block("D"): [block("C")],
+            block("B"): [block("A")],
+        ]
 
         buildLayout()
     }

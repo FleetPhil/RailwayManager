@@ -21,6 +21,10 @@ class Layout: @unchecked Sendable  {
     // Where trains start: train id -> block, each train placed (its block occupied) at startup
     nonisolated(unsafe) var initialTrainBlocks: [Int: Block] = [:]
     
+    // Blocks a train sent to a block may stop in instead if that block is held by another train:
+    // block -> alternatives in order of preference. One way only: [B: [A]] lets A stand in for B, not B for A
+    nonisolated(unsafe) var alternativeEndBlocks: [Block: [Block]] = [:]
+    
     struct BlockRoute: CustomStringConvertible {
         var fromBlock: Block
         var toBlock: Block
@@ -71,6 +75,11 @@ class Layout: @unchecked Sendable  {
     
     func light(_ id: Int) -> Light {
         return lights.first(where: { $0.id == id })!
+    }
+    
+    // The blocks a segment to this block can end in: the block itself, then its alternatives
+    func endBlocks(for block: Block) -> [Block] {
+        [block] + (alternativeEndBlocks[block] ?? [])
     }
     
     // Return the signal at the end of the block in the specified direction

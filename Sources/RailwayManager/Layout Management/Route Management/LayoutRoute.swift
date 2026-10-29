@@ -259,6 +259,18 @@ extension Layout {
             }
         }
         
+        for (block, alternatives) in alternativeEndBlocks.sorted(by: { $0.key.id < $1.key.id }) {
+            guard blocks.contains(block) else {
+                throw TrainError.layoutError("Alternative end blocks given for unknown block \(block.id)")
+            }
+            for alternative in alternatives where blocks.contains(alternative) == false {
+                throw TrainError.layoutError("Block \(block.id) has unknown alternative end block \(alternative.id)")
+            }
+            if alternatives.contains(block) || Set(alternatives).count != alternatives.count {
+                throw TrainError.layoutError("Block \(block.id) alternative end blocks \(alternatives.map(\.id)) include itself or a duplicate")
+            }
+        }
+        
         for sensor in self.sensors {
             switch sensor.location {
             case    .start(let sensorBlock, _),
