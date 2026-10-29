@@ -370,6 +370,22 @@ extension Layout {
         
         log.info("Layout \(type(of: self)) is valid")
     }
+    
+    // Check the initial train positions: every train is in the roster, every block in the layout,
+    // and no block is the start for two trains
+    func checkInitialTrainBlocks(_ roster: TrainRoster) throws {
+        for (trainID, block) in initialTrainBlocks.sorted(by: { $0.key < $1.key }) {
+            guard roster.train(id: trainID) != nil else {
+                throw TrainError.layoutError("Initial position given for unknown train \(trainID)")
+            }
+            guard blocks.contains(block) else {
+                throw TrainError.layoutError("Train \(trainID) starts in unknown block \(block.id)")
+            }
+        }
+        for (block, entries) in Dictionary(grouping: initialTrainBlocks, by: { $0.value }) where entries.count > 1 {
+            throw TrainError.layoutError("Trains \(entries.map(\.key).sorted()) all start in block \(block.id)")
+        }
+    }
 }
 
 

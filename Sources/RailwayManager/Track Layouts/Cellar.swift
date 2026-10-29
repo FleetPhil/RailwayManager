@@ -170,6 +170,8 @@ class Cellar: Layout, @unchecked Sendable {
 //            Sensor(id: 27, address: 0, location: .station(block("H"))),
 //            Sensor(id: 28, address: 0, location: .station(block("J"))),
         ]
+        initialTrainBlocks = [1: block("B")]
+
         buildLayout()
     }
 }

@@ -132,6 +132,45 @@ actor LayoutManager: Sendable {
         
         // Reset block and point states
         try await trackStateService.reset()
+        
+        // Trains are still standing in their last known blocks. A conflict is only logged, so the reset completes
+        let trainController = trackStateService.trainController
+        for train in trains.trains {
+            guard let block = try? await trainController.trainState(train).lastKnownBlock else { continue }
+            let direction = (try? await trainController.trainDirection(train)) ?? .forward
+            do {
+                try await trackStateService.setStateForBlock(block, newState: .occupied(train, direction))
+            } catch {
+                log.error("Can't occupy block \(block) for train \(train.id) after reset: \(error)")
+            }
+        }
+    }
+    
+    // Put an idle train in a block, at startup or after it has been moved by hand: free any other
+    // blocks it holds and occupy this one. Throws if the train is running a route or the block is
+    // held by another train
+    func placeTrain(_ train: Train, in block: Block) async throws {
+        if let routeOperator = routeOperators[train], await !routeOperator.routeState.isInactive {
+            throw TrainError.trainAlreadyActive(train.id)
+        }
+        if let holder = try await trackStateService.trainForBlock(block), holder != train {
+            throw TrainError.invalidBlockStateChange("Can't place train \(train.id) in block \(block): held by train \(holder.id)")
+        }
+        
+        // Keep the train's direction if it has one
+        let trainController = trackStateService.trainController
+        let direction = (try? await trainController.trainDirection(train)) ?? .forward
+        try await trainController.setTrainDirection(train, direction: direction)
+        
+        for otherBlock in layout.blocks where otherBlock != block {
+            if try await trackStateService.trainForBlock(otherBlock) == train {
+                try await trackStateService.setStateForBlock(otherBlock, newState: .vacant)
+            }
+        }
+        try await trainController.setTrainState(train, state: .idle(block))
+        try await trackStateService.setStateForBlock(block, newState: .occupied(train, direction))
+        
+        log.info("Train \(train.id) placed in block \(block)")
     }
 
     func runRoute(route: Route, train: Train) async throws {

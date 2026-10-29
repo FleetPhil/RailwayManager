@@ -18,6 +18,9 @@ class Layout: @unchecked Sendable  {
     nonisolated(unsafe) var signals: [Signal] = []
     nonisolated(unsafe) var lights: [Light] = []
     
+    // Where trains start: train id -> block, each train placed (its block occupied) at startup
+    nonisolated(unsafe) var initialTrainBlocks: [Int: Block] = [:]
+    
     struct BlockRoute: CustomStringConvertible {
         var fromBlock: Block
         var toBlock: Block

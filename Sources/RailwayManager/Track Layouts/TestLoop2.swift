@@ -89,6 +89,8 @@ class TestLoop2: Layout, @unchecked Sendable {
             Sensor(id: 9, address: 9, location: .start(block("C"), 10)),
             Sensor(id: 10, address: 10, location: .end(block("C"), 10)),
         ]
+        initialTrainBlocks = [1: block("S1")]
+
         buildLayout()
     }
 }

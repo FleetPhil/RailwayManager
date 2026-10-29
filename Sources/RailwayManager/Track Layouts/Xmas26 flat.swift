@@ -192,6 +192,8 @@ class Xmas26Flat: Layout, @unchecked Sendable {
             Sensor(id: 28, address: 28, location: .end(block("P"), 10)),
 
         ]
+        initialTrainBlocks = [1: block("D")]
+
         buildLayout()
     }
 }

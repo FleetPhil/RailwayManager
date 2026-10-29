@@ -196,12 +196,21 @@ struct RailwayManager: ParsableCommand {
     static func createLayoutManager(layout: Layout, trains: TrainRoster) async throws -> LayoutManager {
         do {
             try layout.layoutIsValid()
+            try layout.checkInitialTrainBlocks(trains)
         } catch {
             print(error)
             throw TrainError.layoutError("Unable to initialise layout")
         }
 
-        return try await LayoutManager(layout: layout, trains: trains)
+        let layoutManager = try await LayoutManager(layout: layout, trains: trains)
+        
+        // Put the trains in their starting blocks (checked above)
+        for (trainID, block) in layout.initialTrainBlocks.sorted(by: { $0.key < $1.key }) {
+            if let train = trains.train(id: trainID) {
+                try await layoutManager.placeTrain(train, in: block)
+            }
+        }
+        return layoutManager
     }
     
     // Monitor route requests received over MQTT and run each valid one
@@ -328,6 +337,26 @@ struct RailwayManager: ParsableCommand {
         if input.starts(with: "dp") {            // Dump block routes and paths to a file
             let url = try layoutManager.layout.writeTopologyDump()
             log.info("Topology written to \(url.path)")
+        }
+
+        if input.starts(with: "tb") {            // Place train: tb <train> <block>
+            let args = input.dropFirst(2).split(separator: " ").map(String.init)
+            
+            // Block ids are upper case
+            guard args.count == 2,
+                  let trainID = Int(args[0]),
+                  let train = layoutManager.trains.train(id: trainID),
+                  layoutManager.layout.hasBlock(args[1].uppercased()) else {
+                log.error("Usage: tb <train> <block> (known train and block)")
+                return
+            }
+            
+            // A refused placement is logged so that the console keeps running
+            do {
+                try await layoutManager.placeTrain(train, in: layoutManager.layout.block(args[1].uppercased()))
+            } catch {
+                log.error("Can't place train \(trainID): \(error)")
+            }
         }
 
         if input.starts(with: "rr") {            // Run route: rr <fromBlock> <toBlock> <f|r> [train]
