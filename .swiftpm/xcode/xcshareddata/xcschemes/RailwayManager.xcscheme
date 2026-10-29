@@ -57,12 +57,20 @@
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
+            argument = "-layout TestLoop"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-layout Cellar"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
             argument = "-layout Xmas26"
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-layout XmasFlat"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-noDCC"
@@ -70,6 +78,10 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-noMQTT"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-layout Final"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

@@ -202,7 +202,7 @@ class Final26: Layout, @unchecked Sendable {
             Sensor(id: 28, address: 28, location: .end(block("P"), 10)),
 
         ]
-        initialTrainBlocks = [1: block("D")]
+        initialTrainBlocks = [1: block("D"), 2: block("F")]
         
         // Parallel platforms: a train may stop in either
         alternativeEndBlocks = [

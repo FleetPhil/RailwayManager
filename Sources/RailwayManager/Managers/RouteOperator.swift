@@ -598,10 +598,14 @@ actor RouteOperator {
         }
         
         for alternative in layout.alternativeEndBlocks[toBlock] ?? [] {
-            // The next segment must be able to start from the alternative
-            if segmentIndex + 1 < route.segments.count,
-               (try? route.segments[segmentIndex + 1].nominalPath(from: alternative, in: layout)) == nil {
-                continue
+            // The next segment must be able to start from the alternative, without coming back through the
+            // block being left or the block it stands in for (the train would go round to where it started)
+            if segmentIndex + 1 < route.segments.count {
+                guard let continuation = try? route.segments[segmentIndex + 1].nominalPath(from: alternative, in: layout) else { continue }
+                if continuation.pathItems.dropLast().contains(where: { $0.toBlock == fromBlock || $0.toBlock == toBlock }) {
+                    log.verbose("\(rd): Not using \(alternative) for \(toBlock): next segment goes back through \(fromBlock) or \(toBlock)")
+                    continue
+                }
             }
             if let clearPath = try? layout.path(fromBlock: fromBlock, toBlock: alternative, direction: direction, isBlocked: isBlocked) {
                 log.info("\(rd): No clear path to \(toBlock): going to \(alternative) instead, path \(clearPath.pathItems)")
