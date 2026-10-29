@@ -32,19 +32,13 @@ enum LogLevel: String, CaseIterable, ExpressibleByArgument {
 
 // Track layouts selectable from the command line
 enum LayoutName: String, CaseIterable, ExpressibleByArgument {
-    case cellar = "Cellar"
-    case testLoop = "TestLoop"
     case testLoop2 = "TestLoop2"
-    case xmas26 = "Xmas26"
-    case xmasFlat = "XmasFlat"
+    case final = "Final"
     
     func makeLayout() -> Layout {
         switch self {
-        case .cellar:       Cellar()
-        case .testLoop:     TestLoop()
         case .testLoop2:    TestLoop2()
-        case .xmas26:       Xmas26()
-        case .xmasFlat:     Xmas26Flat()
+        case .final:        Final26()
         }
         
     }
@@ -79,7 +73,7 @@ struct RailwayManager: ParsableCommand {
     
     @Option(name: .customLong("layout", withSingleDash: true),
             help: "Track layout to run (\(LayoutName.allCases.map(\.rawValue).joined(separator: ", ")))")
-    var layoutName: LayoutName = .cellar
+    var layoutName: LayoutName = .final
     
     @Option(name: .customLong("trains", withSingleDash: true),
             help: "Trains JSON file (default \(TrainRoster.defaultFileURL.path) if it exists, otherwise the built-in trains)")

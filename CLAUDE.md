@@ -1,6 +1,6 @@
 # RailwayManager — notes for Claude
 
-Swift 6 command-line controller for Phil's model railway ("Cellar" layout): CBUS/DCC train, point and signal control, sensor handling, route running, MQTT telemetry and route requests.
+Swift 6 command-line controller for Phil's model railway (the "Final26" layout): CBUS/DCC train, point and signal control, sensor handling, route running, MQTT telemetry and route requests.
 
 **Read `ARCHITECTURE.md` first.** It describes the structure, runtime flow, known issues and, in section 11, the reversing-loop design, the steps taken and open loop-specific items.
 
@@ -8,7 +8,7 @@ Swift 6 command-line controller for Phil's model railway ("Cellar" layout): CBUS
 - Build is done by Phil in Xcode on his Mac; the code uses macOS-only APIs (IOKit) and hardware, so don't assume it can be built or run elsewhere. Make a change, let Phil build, then commit.
 - Commit on `main`, author Phil Diggens <phil@diggens.com>. Don't push unless asked.
 - Keep changes small, one step per commit, with no behaviour change unless that is the point of the change.
-- For topology/path changes, Cellar's paths must stay identical (Cellar has no reversing loops).
+- For path-search changes that are not meant to change paths, the Final26 `dp` dump must stay identical.
 - Keep `ARCHITECTURE.md` up to date with each change (known issues list, domain model, section 11 progress).
 - Don't change the `BlockDirection` case names (`.forward`/`.reverse`); layout files and MQTT route JSON depend on them.
 
@@ -18,4 +18,4 @@ Swift 6 command-line controller for Phil's model railway ("Cellar" layout): CBUS
 - Facing – per train, the block direction the loco travels in when DCC forward. `LayoutTrainController.dccDirection(_:)` is the only conversion between them (`setTrainFacing(_:dccDirection:travelling:)` is the inverse, for a route's `initialDCCDirection`).
 
 ## Testing without hardware
-Run with `-noCBUS` (and `-noMQTT` to use the layout's hard-coded route from `setupRoutes` in `Cellar Routes.swift`). `-layout TestLoop` selects the reversing-loop test layout and `-layout Xmas26` the Xmas26 layout (default `Cellar`; Xmas26 has no hard-coded route, so drive it with `rr` or MQTT). `-trains <path>` loads the train roster from a JSON file (default `~/.railwaymanager/trains.json` if it exists, otherwise the built-in `Resources/trains.json`). On macOS the console accepts `sn<id>` / `ss<id>` to simulate a north/south sensor pulse by sensor id, not hardware address (followed 2s later by the opposite pulse), `st` for status, `dp` to dump block routes and paths to a file in the home directory, `tb <train> <block>` to place an idle train in a block (trains start in the layout's `initialTrainBlocks`), `rr <toBlock> <f|r> [train]` to run a single-segment test route from the train's current block (route id 1, train id defaults to 1), `x` to shut down.
+Run with `-noCBUS` (and `-noMQTT` to use the layout's hard-coded route from `setupRoutes` in `Final Routes.swift`). `-layout Final` selects the Final26 layout (the default) and `-layout TestLoop2` the reversing-loop test layout (no hard-coded route, so drive it with `rr` or MQTT). `-trains <path>` loads the train roster from a JSON file (default `~/.railwaymanager/trains.json` if it exists, otherwise the built-in `Resources/trains.json`). On macOS the console accepts `sn<id>` / `ss<id>` to simulate a north/south sensor pulse by sensor id, not hardware address (followed 2s later by the opposite pulse), `st` for status, `dp` to dump block routes and paths to a file in the home directory, `tb <train> <block>` to place an idle train in a block (trains start in the layout's `initialTrainBlocks`), `rr <toBlock> <f|r> [train]` to run a single-segment test route from the train's current block (route id 1, train id defaults to 1), `x` to shut down.
