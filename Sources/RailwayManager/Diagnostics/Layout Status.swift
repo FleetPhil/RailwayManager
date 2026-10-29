@@ -12,17 +12,17 @@ extension LayoutTrackStateService {
         let snapshot = await snapshot()
         
         for train in snapshot.allTrains {
-            log.verbose("Train \(train.id) (\(train.address)): \(snapshot.trainState(train)!)")
+            log.info("Train \(train.id) (\(train.address)): \(snapshot.trainState(train)!)")
         }
         
         for block in snapshot.allBlocks.sorted(by: { $0.id < $1.id }) {
             let blockState = snapshot.blockState(block)!
             if  blockState != .vacant {
-                log.verbose("\(block): \(blockState)")
+                log.info("\(block): \(blockState)")
             }
             
             if let locks = snapshot.directionLocks(block) {
-                log.verbose("\(block) locks: \(locks.map({ "\($0.train.id) \($0.direction)" }))")
+                log.info("\(block) locks: \(locks.map({ "\($0.train.id) \($0.direction)" }))")
             }
         }
         
@@ -35,7 +35,11 @@ extension LayoutTrackStateService {
         log.verbose("Signals: \(signalStates)")
 
         for point in snapshot.allPoints.sorted(by: { $0.id < $1.id }) {
-            log.verbose("Point \(point.id): \(snapshot.pointState(point)!)")
+            if snapshot.pointState(point)!.reservedByTrain != nil {
+                log.info("Point \(point.id): \(snapshot.pointState(point)!)")
+            } else {
+                log.verbose("Point \(point.id): \(snapshot.pointState(point)!)")
+            }
         }
     }
 }

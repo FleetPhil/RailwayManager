@@ -157,7 +157,7 @@ actor LayoutTrainController {
     func setTrainState(_ train: Train, state: TrainRuntimeState) async throws {
         if state == trainStates[train] { return }
         
-        log.debug("Train \(train) state from \(trainStates[train], default: "none") to \(state)")
+        log.info("Train \(train) state from \(trainStates[train], default: "none") to \(state)")
         
         trainStates[train] = state
         

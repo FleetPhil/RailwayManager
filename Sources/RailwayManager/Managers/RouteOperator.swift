@@ -179,7 +179,7 @@ actor RouteOperator {
         
         
         if newSpeed != lastCommandedTrainSpeed {
-            log.debug("Train speed is \(newSpeed) (was \(lastCommandedTrainSpeed))")
+            log.info("Train speed is \(newSpeed) (was \(lastCommandedTrainSpeed))")
             lastCommandedTrainSpeed = newSpeed
             
             try await trainController.setSpeedforTrain(train, speed: lastCommandedTrainSpeed, delay: delay)
@@ -269,6 +269,9 @@ actor RouteOperator {
         let sensorBlockDirection = try await travelDirection(in: sensor.block)
         let isStartOfBlock = sensor.location.isStart(sensorBlockDirection)
         let isEndOfBlock = sensor.location.isEnd(sensorBlockDirection)
+        
+        let startEndText = isStartOfBlock ? "start" : isEndOfBlock ? "end" : "mid"
+        log.info("Sensor \(sensor) \(orientation) set at \(startEndText) of block \(sensor.block) for train \(train) ")
         
         // MARK: Sensor set scenarios
         switch trainSensor {

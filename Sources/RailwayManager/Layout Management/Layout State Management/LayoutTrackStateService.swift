@@ -127,7 +127,7 @@ actor LayoutTrackStateService {
     }
     
     func setSignalState(_ signal: Signal, home: SignalState, distant: SignalState?) async throws {
-        log.verbose("Signal \(signal) changed from \(signalStates[signal] ?? (.off, .off)) to \(home), \(distant ?? .off)")
+//        log.verbose("Signal \(signal) changed from \(signalStates[signal] ?? (.off, .off)) to \(home), \(distant ?? .off)")
         try await signal.setState(home: home, distant: distant ?? .off)
         signalStates[signal] = (home, distant ?? .off)
 
@@ -191,7 +191,7 @@ actor LayoutTrackStateService {
         
         // Ignore
         guard oldState != newState else { return }
-        log.debug("Block \(block) state request from \(oldState) to \(newState)")
+        log.info("Block \(block) state request from \(oldState) to \(newState)")
 
         switch newState {
         case .vacant:
@@ -309,7 +309,9 @@ actor LayoutTrackStateService {
     // Path Item is a block-block transition, maybe involving 1 or more points
     // This function is called when the next transition is required
     func reservePathItem(_ item: PathItem, forTrain: Train) async throws -> TrackResource? {
+        
         // MARK: Critical section: no awaits until all resources are marked reserved
+        
         let oldState = blockStates[item.toBlock] ?? .vacant
         switch oldState {
         case .vacant:
@@ -343,7 +345,7 @@ actor LayoutTrackStateService {
         }
 
         // All checks passed: mark the block, direction locks and points reserved
-        log.verbose("Block \(item.toBlock) state request from \(oldState) to \(BlockRuntimeState.reserved(forTrain, item.toDirection))")
+        log.info("Block \(item.toBlock) state request from \(oldState) to \(BlockRuntimeState.reserved(forTrain, item.toDirection))")
         if oldState.isVacant {
             // Clear any existing lock on this block for this train
             try await releaseDirectionLock(block: item.toBlock, train: forTrain)
@@ -363,7 +365,7 @@ actor LayoutTrackStateService {
         }
         // MARK: End critical section
         
-        // Command the point hardware
+        // Command the point hardware - this will sleep the task so don't move it up
         for pointSetting in item.pointSettings {
             try await setDirectionForPoint(pointSetting.point, newDirection: pointSetting.direction)
         }
@@ -381,7 +383,7 @@ actor LayoutTrackStateService {
         }
         if newDirection == .single { return }                               // Ignore
         
-        log.debug("Point \(point.id) set to \(newDirection)")
+        log.verbose("Point \(point.id) set to \(newDirection)")
         
         guard let newState = pointStates[point]?.newStateWithDirection(newDirection) else {
             throw TrainError.unexpectedTrackState("No state for point \(point.id)")
@@ -415,7 +417,7 @@ actor LayoutTrackStateService {
     }
 
     func setReservedTrainForPoint(_ point: Point, to: Train?, associatedStartBlock: Block?) async throws {
-        log.verbose("Point \(point) set to reserved \(to, default: "None")")
+        log.info("Point \(point) set to reserved \(to, default: "None")")
 
         if reservedTrainForPoint(point) != nil && to != nil {
             throw TrainError.invalidBlockStateChange("Point \(point.id) already reserved by train \(reservedTrainForPoint(point)!), cannot reserve for \(to!)")
