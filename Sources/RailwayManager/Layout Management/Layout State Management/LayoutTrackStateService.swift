@@ -445,10 +445,6 @@ actor LayoutTrackStateService {
         return pointStates[point]?.freeWithBlock
     }
     
-    func occupiedBlockForTrain(_ train: Train) -> Block? {
-        blockStates.filter({ $0.value.train == train }).first?.key
-    }
-    
     // Return the next block entering the point from this direction or nil if the point is against us or error
     func nextActiveBlock(afterPoint: Point, entering: PointDirection) -> Block? {
         // Check if point is against us
