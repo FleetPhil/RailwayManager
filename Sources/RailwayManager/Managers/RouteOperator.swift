@@ -47,6 +47,8 @@ actor RouteOperator {
     // Each path item is worked out as the front reaches the block before it.
     private var frontSegmentIndex: Int = 0
     private var frontItem: PathItem? = nil
+    // The block the train starts the route from, where it was when the route was run
+    private var startBlock: Block? = nil
     // The path items the front has moved on to that the rear has not yet cleared, oldest first:
     // the rear of the train is on the first
     private var rearItems: [PathItem] = []
@@ -86,14 +88,23 @@ actor RouteOperator {
         currentSegment.waitTime
     }
     
+    // The block a segment starts from: the route's start block for the first, otherwise where the previous segment ended
+    private func fromBlock(ofSegment index: Int) throws -> Block {
+        if index > 0 {
+            return route.segments[index - 1].toBlock
+        }
+        guard let startBlock else { throw TrainError.noStartBlockForRoute(route.id) }
+        return startBlock
+    }
+    
     // MARK: - Route lifecycle
     
-    func resetRoute(route: Route) async throws {
-        self.route = route
-        
-        // Check no active route or the train is in the correct start block for this route
-        // Function throws if not
+    func resetRoute(route: Route, startBlock: Block) async throws {
+        // Check no active route. Function throws if not
         try await validStateForStart(route: route)
+        
+        self.route = route
+        self.startBlock = startBlock
         
         // Request DCC session if necessary
         try await trainController.requestSession(for: train)
@@ -103,15 +114,15 @@ actor RouteOperator {
         if let initialDCCDirection = route.initialDCCDirection {
             await trainController.setTrainFacing(train, dccDirection: initialDCCDirection, travelling: route.initialDirection)
         }
-        try await stateService.setStateForTrain(train, state: .idle(route.startBlock))
-        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, route.initialDirection))
+        try await stateService.setStateForTrain(train, state: .idle(startBlock))
+        try await stateService.setStateForBlock(startBlock, newState: .occupied(train, route.initialDirection))
         
         // The first path item is worked out at route start
         frontSegmentIndex = 0
         frontItem = nil
         rearItems = []
 
-        try await LayoutEventHub.shared.publish(.didOccupyBlock(route.startBlock, train))
+        try await LayoutEventHub.shared.publish(.didOccupyBlock(startBlock, train))
 
         log.info("\(rd): \(route): reset complete")
     }
@@ -235,7 +246,7 @@ actor RouteOperator {
         // Train will be commanded to move when first transition is clear
         // Trigger processing for this block being occupied
         
-        try await stateService.setStateForBlock(route.startBlock, newState: .occupied(train, route.initialDirection))
+        try await stateService.setStateForBlock(fromBlock(ofSegment: 0), newState: .occupied(train, route.initialDirection))
         
         routeState = .starting
         
@@ -549,7 +560,7 @@ actor RouteOperator {
                 guard segmentIndex + 1 < route.segments.count else { return nil }
                 segmentIndex += 1
             }
-            fromBlock = route.segments[segmentIndex].fromBlock
+            fromBlock = try self.fromBlock(ofSegment: segmentIndex)
             direction = route.segments[segmentIndex].direction
         }
 
@@ -629,8 +640,8 @@ actor RouteOperator {
     // Return if valid or throw if not
     private func validStateForStart(route: Route) async throws {
         switch routeState {
-        case .dormant:
-            return          // Never run
+        case .dormant, .ended:
+            return          // Never run, or finished: the route starts where the train is
             
         case .starting, .active:          // Unexpected
             throw TrainError.invalidRoute("\(rd): \(route): Run route \(route.id) but already in running state")
@@ -638,14 +649,6 @@ actor RouteOperator {
             throw TrainError.invalidRoute("\(rd): \(route): Attempt to run route in error state")
         case .ending:
             throw TrainError.invalidRoute("\(rd): \(route): Attempt to run route in ending state")
-        case .ended:
-            // check the train is in the correct start block
-            if let trainBlock = await stateService.occupiedBlockForTrain(train) {
-                if try route.startBlock != trainBlock {
-                    throw TrainError.invalidRoute("\(rd): \(route): Can't run route: train \(train) is in block \(trainBlock) but route starts in \(try! route.startBlock)")
-                }
-            }
-            log.debug("Route \(route) start block \(try! route.startBlock) valid for train \(train)")
         }
     }
 }

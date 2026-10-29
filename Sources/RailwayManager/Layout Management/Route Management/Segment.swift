@@ -56,29 +56,28 @@ extension WaitTime: Codable {
     }
 }
 
-// A segment of a route: from one block to another, starting in the given direction in fromBlock.
-// The path between them is worked out as the train runs (RouteOperator), so it can avoid other trains.
+// A segment of a route: to a block, starting in the given direction in the block the segment starts
+// from (where the train is for the first segment, otherwise where the previous segment ended).
+// The path is worked out as the train runs (RouteOperator), so it can avoid other trains.
 
 struct Segment: Sendable, CustomStringConvertible {
-    let fromBlock: Block
     let toBlock: Block
-    let direction: BlockDirection   // Travel direction in fromBlock
+    let direction: BlockDirection   // Travel direction in the block the segment starts from
     let waitTime: WaitTime?         // No stop if null
 
-    init(fromBlock: Block, toBlock: Block, direction: BlockDirection, waitTime: WaitTime?) {
-        self.fromBlock = fromBlock
+    init(toBlock: Block, direction: BlockDirection, waitTime: WaitTime?) {
         self.toBlock = toBlock
         self.direction = direction
         self.waitTime = waitTime
     }
 
-    // The shortest path for the segment ignoring other trains; throws if there is none
-    func nominalPath(in layout: Layout) throws -> Path {
+    // The shortest path for the segment from the given block ignoring other trains; throws if there is none
+    func nominalPath(from fromBlock: Block, in layout: Layout) throws -> Path {
         try layout.path(fromBlock: fromBlock, toBlock: toBlock, direction: direction)
     }
 
     var description: String {
-        "\(fromBlock)-\(toBlock) \(direction)"
+        "\(toBlock) \(direction)"
     }
 }
 

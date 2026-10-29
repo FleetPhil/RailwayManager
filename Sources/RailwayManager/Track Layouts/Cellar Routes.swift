@@ -20,12 +20,11 @@ extension RailwayManager {
         }
     }
     
-    // B to H forward, then back to B in reverse
+    // From B (where train 1 starts) to H forward, then back to B in reverse
     private static func cellarRoute(layout: Layout) throws -> Route {
-        let segment1 = Segment(fromBlock: layout.block("B"), toBlock: layout.block("H"), direction: .forward, waitTime: .halt)
-        let segment2 = Segment(fromBlock: layout.block("H"), toBlock: layout.block("B"), direction: .reverse, waitTime: .station)
+        let segment1 = Segment(toBlock: layout.block("H"), direction: .forward, waitTime: .halt)
+        let segment2 = Segment(toBlock: layout.block("B"), direction: .reverse, waitTime: .station)
         let route1 = Route(id: 1, segments: [segment1, segment2])
-        try route1.validate(in: layout)
         
         log.info("Route is \(route1)")
         

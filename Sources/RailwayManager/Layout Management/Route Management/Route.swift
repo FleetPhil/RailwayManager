@@ -22,16 +22,6 @@ struct Route: CustomStringConvertible, Sendable {
         log.info("Route \(id) created with \(segments.count) segments\(initialDCCDirection.map({ ", starting \($0)" }) ?? "")")
     }
         
-    var startBlock: Block  {
-        get throws {
-            if let startBlock = segments.first?.fromBlock {
-                return startBlock
-            } else {
-                throw TrainError.noStartBlockForRoute(id)
-            }
-        }
-    }
-    
     // The direction for the first segment in the route
     var initialDirection: BlockDirection {
         return segments.first?.direction ?? .forward
@@ -50,29 +40,31 @@ struct Route: CustomStringConvertible, Sendable {
 
 // MARK: Loop check
 extension Route {
-    // Check the route can be run on the layout: each segment starts where the previous one ended,
-    // and there is a path for it (ignoring other trains). Throws if not.
-    func validate(in layout: Layout) throws {
+    // The block each segment starts from: startBlock for the first, then where the previous one ended
+    func segmentStartBlocks(from startBlock: Block) -> [Block] {
+        [startBlock] + segments.dropLast().map(\.toBlock)
+    }
+    
+    // Check the route can be run on the layout from startBlock: there is a path for each segment
+    // (ignoring other trains). Throws if not.
+    func validate(from startBlock: Block, in layout: Layout) throws {
         guard segments.isEmpty == false else {
             throw TrainError.invalidRoute("Route \(id) invalid: no segments")
         }
-        for (previous, segment) in zip(segments, segments.dropFirst()) where segment.fromBlock != previous.toBlock {
-            throw TrainError.invalidRoute("Route \(id) invalid: segment \(segment) does not start where \(previous) ends")
-        }
-        for segment in segments {
-            _ = try segment.nominalPath(in: layout)
+        for (fromBlock, segment) in zip(segmentStartBlocks(from: startBlock), segments) {
+            _ = try segment.nominalPath(from: fromBlock, in: layout)
         }
     }
     
     // The blocks the front of the train enters on the segments' nominal paths, in order, split into
     // stretches at each reversal (a segment that starts in the opposite direction to the one the train arrived in)
-    func blockStretches(in layout: Layout) throws -> [[Block]] {
+    func blockStretches(from startBlock: Block, in layout: Layout) throws -> [[Block]] {
         var stretches: [[Block]] = []
         var arrivalDirection: BlockDirection?
-        for segment in segments {
-            let pathItems = try segment.nominalPath(in: layout).pathItems
+        for (fromBlock, segment) in zip(segmentStartBlocks(from: startBlock), segments) {
+            let pathItems = try segment.nominalPath(from: fromBlock, in: layout).pathItems
             if stretches.isEmpty || segment.direction != arrivalDirection {
-                stretches.append([segment.fromBlock])       // New stretch: route start or reversal
+                stretches.append([fromBlock])               // New stretch: route start or reversal
             }
             stretches[stretches.count - 1] += pathItems.map(\.toBlock)
             arrivalDirection = pathItems.last?.toDirection
@@ -85,8 +77,8 @@ extension Route {
     // while its rear is still there, and the train stops waiting for itself.
     // Uses the nominal paths: a different path taken at runtime to avoid other trains is not checked.
     // Throws if they are too short; warns and skips the check if any length is not known.
-    func checkLoopLengths(for train: Train, in layout: Layout) throws {
-        for stretch in try blockStretches(in: layout) {
+    func checkLoopLengths(for train: Train, from startBlock: Block, in layout: Layout) throws {
+        for stretch in try blockStretches(from: startBlock, in: layout) {
             for (index, block) in stretch.enumerated() {
                 guard let previousIndex = stretch[..<index].lastIndex(of: block) else { continue }
                 let loopBlocks = stretch[(previousIndex + 1)..<index]

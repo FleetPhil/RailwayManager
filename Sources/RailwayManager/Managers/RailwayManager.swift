@@ -268,20 +268,17 @@ struct RailwayManager: ParsableCommand {
         
         var segments: [Segment] = []
         for segmentParams in routeParams.segments {
-            guard layout.hasBlock(segmentParams.fromBlock), layout.hasBlock(segmentParams.toBlock) else {
-                throw TrainError.invalidPath("Unknown block in segment \(segmentParams.fromBlock)-\(segmentParams.toBlock) of route \(routeParams.routeID)")
+            guard layout.hasBlock(segmentParams.toBlock) else {
+                throw TrainError.invalidPath("Unknown block \(segmentParams.toBlock) in route \(routeParams.routeID)")
             }
-            segments.append(Segment(fromBlock: layout.block(segmentParams.fromBlock),
-                                    toBlock: layout.block(segmentParams.toBlock),
+            segments.append(Segment(toBlock: layout.block(segmentParams.toBlock),
                                     direction: segmentParams.direction,
                                     waitTime: segmentParams.waitTime))
         }
         
         let route = Route(id: routeParams.routeID, segments: segments, initialDCCDirection: routeParams.initialDCCDirection)
         
-        // Throws if there are no segments, they don't join up, or a segment's blocks are not connected in its direction
-        try route.validate(in: layout)
-        
+        // The route is validated when it is run, from where the train is
         log.verbose("Route is: \(route.path)")
         
         try await layoutManager.runRoute(route: route, train: train)
@@ -359,33 +356,32 @@ struct RailwayManager: ParsableCommand {
             }
         }
 
-        if input.starts(with: "rr") {            // Run route: rr <fromBlock> <toBlock> <f|r> [train]
+        if input.starts(with: "rr") {            // Run route: rr <toBlock> <f|r> [train]
             let args = input.dropFirst(2).split(separator: " ").map(String.init)
 
             // Train id is optional and defaults to 1
-            guard args.count == 3 || args.count == 4,
-                  let direction: BlockDirection = ["f": .forward, "r": .reverse][args[2]],
-                  let trainID = args.count == 4 ? Int(args[3]) : 1 else {
-                log.error("Usage: rr <fromBlock> <toBlock> <f|r> [train]")
+            guard args.count == 2 || args.count == 3,
+                  let direction: BlockDirection = ["f": .forward, "r": .reverse][args[1]],
+                  let trainID = args.count == 3 ? Int(args[2]) : 1 else {
+                log.error("Usage: rr <toBlock> <f|r> [train]")
                 return
             }
 
             // Block ids are upper case
-            let fromBlock = args[0].uppercased()
-            let toBlock = args[1].uppercased()
+            let toBlock = args[0].uppercased()
 
             // Test command: single segment route, route id fixed at 1
             let routeParams = MQTTManager.RouteParams(
                 command: .runRoute,
                 routeID: 1,
                 trainID: trainID,
-                segments: [.init(fromBlock: fromBlock, toBlock: toBlock, direction: direction, waitTime: .halt)])
+                segments: [.init(toBlock: toBlock, direction: direction, waitTime: .halt)])
 
             // A rejected route is logged so that the console keeps running
             do {
                 try await runRoute(from: routeParams, layoutManager: layoutManager)
             } catch {
-                log.error("Route \(fromBlock)-\(toBlock) rejected: \(error)")
+                log.error("Route to \(toBlock) rejected: \(error)")
             }
         }
     }

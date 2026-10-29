@@ -381,7 +381,6 @@ extension MQTTManager {
     // parameters for each segment of the route
     struct RouteParams: Codable, Sendable {
         struct SegmentParams: Codable, Sendable {
-            var fromBlock: String
             var toBlock: String
             var direction: BlockDirection
             var waitTime: WaitTime?         // No stop at segment end if nil

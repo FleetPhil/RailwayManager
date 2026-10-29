@@ -174,8 +174,16 @@ actor LayoutManager: Sendable {
     }
 
     func runRoute(route: Route, train: Train) async throws {
+        // The route starts from the block the train is in
+        guard let startBlock = try? await trackStateService.trainController.trainState(train).lastKnownBlock else {
+            throw TrainError.invalidRoute("Route \(route.id): position of train \(train.id) not known; place it with tb")
+        }
+        
+        // Throws if there are no segments or a segment has no path from where it starts
+        try route.validate(from: startBlock, in: layout)
+        
         // Reject a route that takes the train round a loop too short for it
-        try route.checkLoopLengths(for: train, in: layout)
+        try route.checkLoopLengths(for: train, from: startBlock, in: layout)
         
         // Look for an existing inActive route operator for this train
         if let routeOperator = routeOperators[train] {
@@ -200,7 +208,7 @@ actor LayoutManager: Sendable {
         // OK all looking good
         try await setState(.running)
         
-        try await routeOperators[train]!.resetRoute(route: route)
+        try await routeOperators[train]!.resetRoute(route: route, startBlock: startBlock)
         
         await LayoutEventHub.shared.publish(.didStartRoute(train))
     }
