@@ -1,6 +1,5 @@
 import Foundation
 
-
 // A train's state in a block, with the train's travel direction in that block
 // (a train part-way round a reversing loop travels in different directions in different blocks)
 enum BlockRuntimeState: Equatable {
@@ -37,13 +36,6 @@ enum BlockRuntimeState: Equatable {
         case .reserved(let train, let direction):       .reserved(train, direction.oppositeDirection)
         case .occupied(let train, let direction):       .occupied(train, direction.oppositeDirection)
         case .vacating(let train, let direction):       .vacating(train, direction.oppositeDirection)
-        }
-    }
-    
-    var vacatingTrain: Train? {
-        switch self {
-        case .vacant, .reserved, .occupied:     return nil
-        case .vacating(let train, _):           return train
         }
     }
 }
@@ -97,7 +89,6 @@ actor LayoutTrackStateService {
         
         pointStates = layout.points.reduce(into: [:], { result, point in
             result[point] = .init(direction: .single, reservedByTrain: nil)
-            
         })
         
         // Reset all points to default position or straight
@@ -108,7 +99,7 @@ actor LayoutTrackStateService {
         signalStates = layout.signals.reduce(into: [:], { result, signal in
             result[signal] = .init((.off, .off))
         })
-                
+        
         // Send MQTT updates
         for block in layout.blocks {
             try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: .vacant)
@@ -117,7 +108,6 @@ actor LayoutTrackStateService {
         for signal in layout.signals {
             try? await MQTTManager.shared.sendSignalState(signal: signal, state: .off)
         }
-        
     }
 
     func signalState(_ signal: Signal) async throws -> (SignalState, SignalState) {
@@ -127,13 +117,11 @@ actor LayoutTrackStateService {
     }
     
     func setSignalState(_ signal: Signal, home: SignalState, distant: SignalState?) async throws {
-//        log.verbose("Signal \(signal) changed from \(signalStates[signal] ?? (.off, .off)) to \(home), \(distant ?? .off)")
         try await signal.setState(home: home, distant: distant ?? .off)
         signalStates[signal] = (home, distant ?? .off)
 
         // Telemetry: a publish failure must not fail the signal update
         try? await MQTTManager.shared.sendSignalState(signal: signal, state: home)
-
     }
     
     // Will not be called if layout is dormant
@@ -163,15 +151,7 @@ actor LayoutTrackStateService {
         }
     }
     
-    func setDirectionForVacantContiguousBlocks(fromBlock: Block, train: Train, direction: BlockDirection) async throws {
-        for (vacantBlock, blockDirection) in layout.contiguousBlocks(fromBlock: fromBlock, direction: direction)
-        where blockState(vacantBlock)?.isVacant ?? true {
-            try await setDirectionLock(block: vacantBlock, train: train, direction: blockDirection)
-        }
-    }
-    
     func setStateForTrain(_ train: Train, state: TrainRuntimeState) async throws {
-        
         if await trainController.isNewTrain(train) {
             log.verbose("Train \(train) state request from none to \(state)")
         } else {
@@ -184,8 +164,7 @@ actor LayoutTrackStateService {
         try await trainController.setTrainState(train, state: state)
     }
     
-    // Validate the transition and set the new state
-    // Return true for valid transition, false for invalid
+    // Validate the transition and set the new state, throwing if the transition is not allowed
     func setStateForBlock(_ block: Block, newState: BlockRuntimeState) async throws {
         let oldState = blockStates[block] ?? .vacant
         
@@ -240,7 +219,6 @@ actor LayoutTrackStateService {
                 if oldTrain != newTrain {
                     throw TrainError.invalidBlockStateChange("Train \(newTrain) can't vacate \(block): occupied by \(oldTrain)")
                 }
-
             }
             blockStates[block] = newState
             
@@ -412,10 +390,6 @@ actor LayoutTrackStateService {
         return pointStates[point]?.reservedByTrain
     }
     
-    func setReserveTrainForPointID(_ id: Int, to: Train?, associatedStartBlock: Block?) async throws {
-        try await setReservedTrainForPoint(layout.point(id), to: to, associatedStartBlock: associatedStartBlock)
-    }
-
     func setReservedTrainForPoint(_ point: Point, to: Train?, associatedStartBlock: Block?) async throws {
         log.info("Point \(point) set to reserved \(to, default: "None")")
 
@@ -446,33 +420,6 @@ actor LayoutTrackStateService {
     func associatedBlockForPoint(_ point: Point) -> Block? {
         return pointStates[point]?.freeWithBlock
     }
-    
-    // Return the next block entering the point from this direction or nil if the point is against us or error
-    func nextActiveBlock(afterPoint: Point, entering: PointDirection) -> Block? {
-        // Check if point is against us
-        guard let currentDirection = pointStates[afterPoint]?.direction else { return nil }
-        
-        if entering == .splitBranch && currentDirection == .splitStraight { return nil }
-        if entering == .splitStraight && currentDirection == .splitBranch { return nil }
-
-        // Point is in our favour so find the next block
-        // Find the exit from this point
-        // If entering single it's the point direction, otherwise it's single
-        let exitDirection = entering == .single ? currentDirection : .single
-        
-        // If the exist is another point then calculate the exit from that
-        let connections = layout.point(afterPoint.id).connections
-        
-        switch connections[exitDirection] {
-        case .block(let block):
-            return block
-        case .point(let point, let direction):
-            return nextActiveBlock(afterPoint: point, entering: direction)
-        case .none:
-            return nil
-        }
-    }
-
 }
 
 // A train expecting to travel through a vacant block in the given direction.

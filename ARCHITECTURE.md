@@ -164,7 +164,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - All signals in `Final26` have address 0 (not wired yet), and it has no block lengths, so `checkLoopLengths` can't check it.
 
 **Dead / legacy code**
-- `Resources/params.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `TestTrack2`, `TramSplit`, SunCalc dependency.
+- `Resources/params.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `PathItem.initialPathItemForBlock`, `TrainError.noLockToRelease` (never thrown), `TestTrack2`, `TramSplit`, SunCalc dependency.
 - `.swiftpm/xcode/ModelRailwayHardware/` held an older standalone copy of the hardware package, since merged into `Sources/ModelRailwayHardware/`. The folder is now empty, but the repo still tracks it as a submodule gitlink (mode 160000) with no `.gitmodules` entry, so `git submodule` commands fail. `git rm --cached .swiftpm/xcode/ModelRailwayHardware` removes the orphan entry.
 
 **Design observations**
