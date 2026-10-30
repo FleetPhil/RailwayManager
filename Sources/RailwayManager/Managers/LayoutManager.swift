@@ -53,14 +53,21 @@ actor LayoutManager {
         self.trackStateService = LayoutTrackStateService(layout: layout)
         self.signalCoordinator = SignalCoordinator()
         
-        backgroundTasks.append(Task {
+        backgroundTasks = [eventLoopTask(), cbusEventTask(), keepAliveTask(), signalRefreshTask()]
+        
+        try await resetTrackState()
+    }
+    
+    // MARK: Background tasks
+    
+    // Process layout events. Each event is dispatched into its own Task so the loop keeps consuming
+    // new events without waiting for prior ones to complete. This is needed because some events
+    // (e.g. didStartRoute) wait for DCC session state that only arrives via a later event (didGetSession).
+    private func eventLoopTask() -> Task<Void, Never> {
+        Task {
             let stream = await LayoutEventHub.shared.subscribe()
             for await event in stream {
                 log.verbose("Event: \(event)")
-                // Each event is dispatched into its own Task so the loop keeps consuming
-                // new events without waiting for prior ones to complete. This is needed
-                // because some events (e.g. didStartRoute) wait for DCC session state that
-                // only arrives via a later event (didGetSession).
                 Task {
                     do {
                         try await self.processEvent(event)
@@ -77,18 +84,22 @@ actor LayoutManager {
                     }
                 }
             }
-        })
-        
-        // Monitor events
-        backgroundTasks.append(Task {
+        }
+    }
+    
+    // Pass CBUS events on to the layout event hub
+    private func cbusEventTask() -> Task<Void, Never> {
+        Task {
             let stream = try! await CBUSManager.shared.CBUSEvents()
             for await event in stream {
                 await LayoutEventHub.shared.publish(event)
             }
-        })
-
-        // Set up Keepalive
-        backgroundTasks.append(Task {
+        }
+    }
+    
+    // Send DCC keep-alives
+    private func keepAliveTask() -> Task<Void, Never> {
+        Task {
             while !Task.isCancelled {
                 // Per-session failures are logged inside sendKeepAlives
                 await self.trainController.sendKeepAlives()
@@ -98,10 +109,12 @@ actor LayoutManager {
                     break       // Cancelled
                 }
             }
-        })
-
-        // Setup signal updates
-        backgroundTasks.append(Task {
+        }
+    }
+    
+    // Refresh the signals while the layout is not dormant
+    private func signalRefreshTask() -> Task<Void, Never> {
+        Task {
             while !Task.isCancelled {
                 do {
                     if layoutState != .dormant {
@@ -114,9 +127,7 @@ actor LayoutManager {
                     log.error("Signal update error: \(error)")
                 }
             }
-        })
-
-        try await resetTrackState()
+        }
     }
     
     // Set track state to dormant

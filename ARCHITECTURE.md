@@ -71,10 +71,10 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - `LayoutTrackStateService.reservePathItem` has an explicit **no-await critical section** for check-and-reserve to prevent two trains reserving the same resources.
 
 ### Background tasks (started in `LayoutManager.init`)
-1. Event loop over `LayoutEventHub`.
-2. CBUS event pump → `LayoutEventHub`.
-3. DCC keep-alive every 3 s (the only keep-alive loop; each session's failure is logged without stopping the rest).
-4. Signal refresh every 0.2 s (only when not dormant).
+1. Event loop over `LayoutEventHub` (`eventLoopTask`).
+2. CBUS event pump → `LayoutEventHub` (`cbusEventTask`).
+3. DCC keep-alive every 3 s (`keepAliveTask`; the only keep-alive loop; each session's failure is logged without stopping the rest).
+4. Signal refresh every 0.2 s, only when not dormant (`signalRefreshTask`).
 
 ## 4. Domain model
 
