@@ -200,6 +200,12 @@ actor RouteOperator {
         try await trainController.setSpeedforTrain(train, speed: .stop)
     }
     
+    // Stop the train and wait for the resource to be freed before moving on to the path item
+    private func stopForResource(_ resource: TrackResource, item: PathItem) async throws {
+        try await stopTrain()
+        try await setTrainState(.stoppedForResource(resource, item))
+    }
+    
     private func setTrainState(_ state: TrainRuntimeState) async throws {
         try await trainController.setTrainState(train, state: state)
     }
@@ -411,8 +417,7 @@ actor RouteOperator {
         switch try await trainController.trainState(train) {
         case .stoppingForResource(let trackResource):
             // Stop and wait as this is the end of a block
-            try await stopTrain()
-            try await setTrainState(.stoppedForResource(trackResource, pathItem))
+            try await stopForResource(trackResource, item: pathItem)
             
         default:
             // Nothing to do, the train is not stopping at the end of this block
@@ -557,8 +562,7 @@ actor RouteOperator {
                 return false
             }
             if isPastEndSensor {
-                try await stopTrain()
-                try await setTrainState(.stoppedForResource(blockingResource, nextItem))
+                try await stopForResource(blockingResource, item: nextItem)
                 return
             }
             try await stateService.setStateForTrain(train, state: .stoppingForResource(blockingResource))
@@ -647,8 +651,7 @@ actor RouteOperator {
     private func requestPathItem(_ item: PathItem) async throws -> RouteState {
         if let blockingResource = try await reserveOrRun(item) {
             // Stop the train if it is moving (normally stopped) and wait for the resource to be freed
-            try await stopTrain()
-            try await setTrainState(.stoppedForResource(blockingResource, item))
+            try await stopForResource(blockingResource, item: item)
             return routeState       // Still waiting: leave the route state unchanged
         }
         
