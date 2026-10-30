@@ -7,7 +7,7 @@
 
 import Foundation
 
-actor LayoutManager: Sendable {
+actor LayoutManager {
     enum LayoutState {
         case dormant
         case running
@@ -30,6 +30,7 @@ actor LayoutManager: Sendable {
     // Layout & state
     private(set) var layoutState: LayoutState = .dormant
     private let trackStateService: LayoutTrackStateService
+    private nonisolated var trainController: LayoutTrainController { trackStateService.trainController }
     
     // Signal coordinator
     private let signalCoordinator: SignalCoordinator
@@ -90,7 +91,7 @@ actor LayoutManager: Sendable {
         backgroundTasks.append(Task {
             while !Task.isCancelled {
                 // Per-session failures are logged inside sendKeepAlives
-                await trackStateService.trainController.sendKeepAlives()
+                await self.trainController.sendKeepAlives()
                 do {
                     try await Task.sleep(for: .seconds(self.keepAliveInterval))
                 } catch {
@@ -115,18 +116,12 @@ actor LayoutManager: Sendable {
             }
         })
 
-        try await resetTrackState(layout: layout)
-        
-        
-        
+        try await resetTrackState()
     }
     
     // Set track state to dormant
-    private func resetTrackState(layout: Layout) async throws {
-        // Remove all route operators
-        for routeOperator in routeOperators {
-            routeOperators.removeValue(forKey: routeOperator.key)
-        }
+    private func resetTrackState() async throws {
+        routeOperators.removeAll()
         
         try await setState(.dormant)
         
@@ -134,7 +129,6 @@ actor LayoutManager: Sendable {
         try await trackStateService.reset()
         
         // Trains are still standing in their last known blocks. A conflict is only logged, so the reset completes
-        let trainController = trackStateService.trainController
         for train in trains.trains {
             guard let block = try? await trainController.trainState(train).lastKnownBlock else { continue }
             let direction = (try? await trainController.trainDirection(train)) ?? .forward
@@ -158,7 +152,6 @@ actor LayoutManager: Sendable {
         }
         
         // Keep the train's direction if it has one
-        let trainController = trackStateService.trainController
         let direction = (try? await trainController.trainDirection(train)) ?? .forward
         try await trainController.setTrainDirection(train, direction: direction)
         
@@ -175,7 +168,7 @@ actor LayoutManager: Sendable {
 
     func runRoute(route: Route, train: Train) async throws {
         // The route starts from the block the train is in
-        guard let startBlock = try? await trackStateService.trainController.trainState(train).lastKnownBlock else {
+        guard let startBlock = try? await trainController.trainState(train).lastKnownBlock else {
             throw TrainError.invalidRoute("Route \(route.id): position of train \(train.id) not known; place it with tb")
         }
         
@@ -198,7 +191,7 @@ actor LayoutManager: Sendable {
                 train: train,
                 layout: layout,
                 stateService: trackStateService,
-                trainController: trackStateService.trainController
+                trainController: trainController
             )
             self.routeOperators[train] = routeOperator
         }
@@ -262,7 +255,7 @@ actor LayoutManager: Sendable {
             Led.setState(.off, forColour: .green)
             Led.setState(.off, forColour: .blue)
             Led.setState(.on, forColour: .red)
-            await trackStateService.trainController.stopAllTrains()
+            await trainController.stopAllTrains()
         }
         
         self.layoutState = newState
@@ -277,7 +270,7 @@ actor LayoutManager: Sendable {
         Led.setState(.off, forColour: .red)
         Led.setState(.off, forColour: .green)
 
-        await trackStateService.trainController.stopAllTrains()
+        await trainController.stopAllTrains()
 
         layoutState = .dormant
         shutdownTask = nil
@@ -292,7 +285,6 @@ actor LayoutManager: Sendable {
     
     // MARK: Process track level events
     func processEvent(_ event: LayoutEvent) async throws {
-        
         switch event {
             
         case .didStartRoute(let train):
@@ -309,14 +301,13 @@ actor LayoutManager: Sendable {
                 // Points are blocked only when required and set
                 // Free any points associated with this block (and associated conflicting points)
                 for point in layout.points {
-                    let associatedBlock = await trackStateService.associatedBlockForPoint(point)
-                    if let associatedBlock, associatedBlock == block {
+                    if await trackStateService.associatedBlockForPoint(point) == block {
                         await LayoutEventHub.shared.publish(.didFreeResource(.point(point)))
                         // Wait otherwise all points set at once causing potential short
                         try await Task.sleep(for: .milliseconds(200))
                     }
                 }
-                                
+                
             case .point(let point):
                 try await trackStateService.setReservedTrainForPoint(point, to: nil, associatedStartBlock: nil)
                 // If point has been freed and it has a default value reset to that value
@@ -399,26 +390,21 @@ actor LayoutManager: Sendable {
             
         // MARK: Stop trains and reset track state
         case .stopAllTrainsResetTrack:
-            await trackStateService.trainController.stopAllTrains()
-            try await resetTrackState(layout: layout)
+            await trainController.stopAllTrains()
+            try await resetTrackState()
             
         // MARK: DCC Management
         case .didGetSession(session: let session, address: let address):
-            await trackStateService.trainController.activateSession(session, forAddress: address)
+            await trainController.activateSession(session, forAddress: address)
             
         case .sessionAllocated(address: let address):
-            try await trackStateService.trainController.stealSession(address: address)
-            
-            
+            try await trainController.stealSession(address: address)
             
         default:        // Ignore
             break
-        }       
+        }
     }
     
-}
-
-extension LayoutManager {
     func printStatus() async {
         await trackStateService.printStatus()
     }
