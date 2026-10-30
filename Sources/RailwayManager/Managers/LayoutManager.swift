@@ -322,95 +322,31 @@ actor LayoutManager {
     // MARK: Process track level events
     func processEvent(_ event: LayoutEvent) async throws {
         switch event {
-            
         case .didStartRoute(let train):
             try await routeOperator(for: train).handleStartRouteEvent()
             
-        // MARK: Check for events that change the track or signal state
         case .didFreeResource(let resource):
-            switch resource {
-            case .block(let block):
-                // Free any points associated with this route
-                // Points are blocked only when required and set
-                // Free any points associated with this block (and associated conflicting points)
-                for point in layout.points {
-                    if await trackStateService.associatedBlockForPoint(point) == block {
-                        await LayoutEventHub.shared.publish(.didFreeResource(.point(point)))
-                        // Wait otherwise all points set at once causing potential short
-                        try await Task.sleep(for: .milliseconds(200))
-                    }
-                }
-                
-            case .point(let point):
-                try await trackStateService.setReservedTrainForPoint(point, to: nil, associatedStartBlock: nil)
-                // If point has been freed and it has a default value reset to that value
-                try await trackStateService.setDefaultPositionforPoint(point)
-            }
-            
-            // Send the event to route operators to check if any are waiting for the resource
-            for routeOperator in routeOperators.values {
-                try await routeOperator.handleFreedResource(resource)
-            }
+            try await freeResource(resource)
             
         case .didSetSensor(let sensorAddress, let sensorOrientation):
-            guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
-            
-            // Find the train in the sensor block
-            guard let train = try await trackStateService.trainForBlock(sensor.location.block) else {
-                throw TrainError.applicationError("Sensor \(sensor) set but no train in block \(sensor.location.block)")
-            }
-            
-            try await routeOperator(for: train).handleSensorSet(sensor, orientation: sensorOrientation)
+            try await sensorSet(sensorAddress, orientation: sensorOrientation)
             
         case .didEndTimer:
             // Currently unused
             log.error("Unexpected end timer event")
             
         case .didPushButton(let button):
-            log.info("Button \(button) pressed")
-            switch button {
-            case 1:
-                // Run default route
-                break
-                
-            case 2:     // disconnect MQTT
-                try await MQTTManager.shared.disconnect()
-
-            case 3:
-                // Stop all trains & shut down
-                await completeShutdown()
-                try? await MQTTManager.shared.disconnect()
-                
-                // Print sensor stats
-                if !GlobalOptions.noCBUS {
-                    await CBUSManager.shared.printSensorStats()
-                }
-                
-                try await Task.sleep(for: .seconds(1))      // Allow time to print stats
-                
-                exit(0)
-                
-            case 5:     // Touch sensor
-                break
-                
-            default:
-                log.error("Unknown button \(button) pressed")
-            }
+            try await buttonPushed(button)
             
         case .didEndRoute(let train):
-            log.info("Train \(train) ended")
-
-            if await !hasActiveRoutes() {
-                log.info("No active route operators: setting dormant state")
-                try await setState(.dormant)
-            }
+            try await routeEnded(train)
             
-        // MARK: Stop trains and reset track state
+        // Stop trains and reset track state
         case .stopAllTrainsResetTrack:
             await trainController.stopAllTrains()
             try await resetTrackState()
             
-        // MARK: DCC Management
+        // DCC management
         case .didGetSession(session: let session, address: let address):
             await trainController.activateSession(session, forAddress: address)
             
@@ -419,6 +355,88 @@ actor LayoutManager {
             
         default:        // Ignore
             break
+        }
+    }
+    
+    // A track resource has been freed: free a block's points, or reset a point, then pass it on to the
+    // route operators in case any are waiting for it
+    private func freeResource(_ resource: TrackResource) async throws {
+        switch resource {
+        case .block(let block):
+            // Free any points associated with this route
+            // Points are blocked only when required and set
+            // Free any points associated with this block (and associated conflicting points)
+            for point in layout.points {
+                if await trackStateService.associatedBlockForPoint(point) == block {
+                    await LayoutEventHub.shared.publish(.didFreeResource(.point(point)))
+                    // Wait otherwise all points set at once causing potential short
+                    try await Task.sleep(for: .milliseconds(200))
+                }
+            }
+            
+        case .point(let point):
+            try await trackStateService.setReservedTrainForPoint(point, to: nil, associatedStartBlock: nil)
+            // If point has been freed and it has a default value reset to that value
+            try await trackStateService.setDefaultPositionforPoint(point)
+        }
+        
+        // Send the event to route operators to check if any are waiting for the resource
+        for routeOperator in routeOperators.values {
+            try await routeOperator.handleFreedResource(resource)
+        }
+    }
+    
+    // A sensor has been set: pass it to the route operator of the train in the sensor's block
+    private func sensorSet(_ sensorAddress: Int, orientation: SensorEventOrientation) async throws {
+        guard let sensor = layout.sensor(sensorAddress) else { throw TrainError.invalidSensor(sensorAddress) }
+        
+        // Find the train in the sensor block
+        guard let train = try await trackStateService.trainForBlock(sensor.location.block) else {
+            throw TrainError.applicationError("Sensor \(sensor) set but no train in block \(sensor.location.block)")
+        }
+        
+        try await routeOperator(for: train).handleSensorSet(sensor, orientation: orientation)
+    }
+    
+    private func buttonPushed(_ button: Int) async throws {
+        log.info("Button \(button) pressed")
+        switch button {
+        case 1:
+            // Run default route
+            break
+            
+        case 2:     // disconnect MQTT
+            try await MQTTManager.shared.disconnect()
+
+        case 3:
+            // Stop all trains & shut down
+            await completeShutdown()
+            try? await MQTTManager.shared.disconnect()
+            
+            // Print sensor stats
+            if !GlobalOptions.noCBUS {
+                await CBUSManager.shared.printSensorStats()
+            }
+            
+            try await Task.sleep(for: .seconds(1))      // Allow time to print stats
+            
+            exit(0)
+            
+        case 5:     // Touch sensor
+            break
+            
+        default:
+            log.error("Unknown button \(button) pressed")
+        }
+    }
+    
+    // A train has finished its route: go dormant once no train is running one
+    private func routeEnded(_ train: Train) async throws {
+        log.info("Train \(train) ended")
+
+        if await !hasActiveRoutes() {
+            log.info("No active route operators: setting dormant state")
+            try await setState(.dormant)
         }
     }
     
