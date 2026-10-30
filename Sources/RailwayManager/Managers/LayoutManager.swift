@@ -144,7 +144,7 @@ actor LayoutManager {
     // blocks it holds and occupy this one. Throws if the train is running a route or the block is
     // held by another train
     func placeTrain(_ train: Train, in block: Block) async throws {
-        if let routeOperator = routeOperators[train], await !routeOperator.routeState.isInactive {
+        if await isRunningRoute(train) {
             throw TrainError.trainAlreadyActive(train.id)
         }
         if let holder = try await trackStateService.trainForBlock(block), holder != train {
@@ -178,22 +178,23 @@ actor LayoutManager {
         // Reject a route that takes the train round a loop too short for it
         try route.checkLoopLengths(for: train, from: startBlock, in: layout)
         
-        // Look for an existing inActive route operator for this train
-        if let routeOperator = routeOperators[train] {
-            if await !routeOperator.routeState.isInactive {
+        // Reuse the train's route operator if it has one (it must not be running a route), otherwise create one
+        let routeOperator: RouteOperator
+        if let existingOperator = routeOperators[train] {
+            if await isRunningRoute(train) {
                 throw TrainError.trainAlreadyActive(train.id)
             }
+            routeOperator = existingOperator
         } else {
-            // No route operator for this train
             log.debug("Creating route operator for train \(train.name) (\(train))")
-            let routeOperator = RouteOperator(
+            routeOperator = RouteOperator(
                 route: route,
                 train: train,
                 layout: layout,
                 stateService: trackStateService,
                 trainController: trainController
             )
-            self.routeOperators[train] = routeOperator
+            routeOperators[train] = routeOperator
         }
         
         log.info("Route \(route.id) running with train \(train.name)")
@@ -201,9 +202,33 @@ actor LayoutManager {
         // OK all looking good
         try await setState(.running)
         
-        try await routeOperators[train]!.resetRoute(route: route, startBlock: startBlock)
+        try await routeOperator.resetRoute(route: route, startBlock: startBlock)
         
         await LayoutEventHub.shared.publish(.didStartRoute(train))
+    }
+    
+    // MARK: Route operators
+    
+    // The train's route operator: one is created when the train first runs a route
+    private func routeOperator(for train: Train) throws -> RouteOperator {
+        guard let routeOperator = routeOperators[train] else {
+            throw TrainError.applicationError("No route operator for train \(train)")
+        }
+        return routeOperator
+    }
+    
+    // The train is running a route (one is starting, active or ending)
+    private func isRunningRoute(_ train: Train) async -> Bool {
+        guard let routeOperator = routeOperators[train] else { return false }
+        return await !routeOperator.routeState.isInactive
+    }
+    
+    // Any train is running a route
+    private func hasActiveRoutes() async -> Bool {
+        for train in routeOperators.keys {
+            if await isRunningRoute(train) { return true }
+        }
+        return false
     }
     
     // MARK: Layout state
@@ -288,10 +313,7 @@ actor LayoutManager {
         switch event {
             
         case .didStartRoute(let train):
-            guard let routeOperator = routeOperators[train] else {
-                throw TrainError.applicationError("No route operator for train \(train)")
-            }
-            try await routeOperator.handleStartRouteEvent()
+            try await routeOperator(for: train).handleStartRouteEvent()
             
         // MARK: Check for events that change the track or signal state
         case .didFreeResource(let resource):
@@ -327,12 +349,7 @@ actor LayoutManager {
                 throw TrainError.applicationError("Sensor \(sensor) set but no train in block \(sensor.location.block)")
             }
             
-            // Get the route operator for this train
-            guard let routeOperator = routeOperators[train] else {
-                throw TrainError.applicationError("No route operator for train \(train)")
-            }
-            
-            try await routeOperator.handleSensorSet(sensor, orientation: sensorOrientation)
+            try await routeOperator(for: train).handleSensorSet(sensor, orientation: sensorOrientation)
             
         case .didEndTimer:
             // Currently unused
@@ -372,18 +389,7 @@ actor LayoutManager {
         case .didEndRoute(let train):
             log.info("Train \(train) ended")
 
-            var isActiveRouteOperators: Bool {
-                get async {
-                    for routeOperator in routeOperators.values {
-                        if routeOperator.routeState.isInactive == false {
-                            return true
-                        }
-                    }
-                    return false            // No active operators
-                }
-            }
-            
-            if await isActiveRouteOperators == false {
+            if await !hasActiveRoutes() {
                 log.info("No active route operators: setting dormant state")
                 try await setState(.dormant)
             }
