@@ -341,11 +341,7 @@ actor RouteOperator {
         // Check if we should stop at this sensor for a timer
         if case .stoppingForTimer(let stopSensor, let timer) = try await trainController.trainState(train),
                   sensor == stopSensor || isLongTrainStop {
-            let stopDelay = stopDelay(sensor: stopSensor)
-            if stopDelay > 0 {
-                try await Task.sleep(for: .seconds(stopDelay))
-            }
-            try await stopTrain()
+            try await stopAfterDelay(for: stopSensor)
             try await setTrainState(.stoppedAtSensor(sensor))
             
             try await Task.sleep(for: .seconds(timer.timeInterval))
@@ -360,12 +356,7 @@ actor RouteOperator {
     // Cleanup at end of route after last sensor has been set
     private func endRoute(atSensor: Sensor) async throws {
         // TODO: add stopping event after timer instead of sleep
-        let stopDelay = stopDelay(sensor: atSensor)
-        
-        // Wait for the delay before ending the route
-        try await Task.sleep(for: .seconds(stopDelay))
-
-        try await stopTrain()
+        try await stopAfterDelay(for: atSensor)
         try await setTrainState(.idle(atSensor.location.block))
         
         // Free any resources owned by this train except the block with the sensor that it has stopped at
@@ -389,6 +380,15 @@ actor RouteOperator {
 
         routeState = .ended
         await LayoutEventHub.shared.publish(.didEndRoute(train))
+    }
+    
+    // Stop the train once it has run on past the stop sensor by the sensor's stop delay
+    private func stopAfterDelay(for sensor: Sensor) async throws {
+        let delay = stopDelay(sensor: sensor)
+        if delay > 0 {
+            try await Task.sleep(for: .seconds(delay))
+        }
+        try await stopTrain()
     }
     
     // Return the delay before stopping for the train at this sensor
