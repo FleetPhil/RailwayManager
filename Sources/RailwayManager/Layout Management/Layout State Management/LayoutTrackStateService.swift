@@ -51,13 +51,6 @@ struct PointRuntimeState: CustomStringConvertible, Sendable, Equatable {
         if let freeWithBlock { result.append(", free with \(freeWithBlock)") }
         return result
     }
-    
-    // Return a new struct with just the direction changed
-    func newStateWithDirection(_ direction: PointDirection) -> Self {
-        return PointRuntimeState(direction: direction,
-                                 reservedByTrain: self.reservedByTrain,
-                                 freeWithBlock: self.freeWithBlock)
-    }
 }
 
 actor LayoutTrackStateService {
@@ -83,22 +76,16 @@ actor LayoutTrackStateService {
 
     // Set defaults for block and point states
     func reset() async throws {
-        blockStates = layout.blocks.reduce(into: [:]) { result, block in
-            result[block] = .vacant
-        }
-        
-        pointStates = layout.points.reduce(into: [:], { result, point in
-            result[point] = .init(direction: .single, reservedByTrain: nil)
-        })
+        // A duplicated id keeps the last element, as assigning in a loop would
+        blockStates = Dictionary(layout.blocks.map { ($0, .vacant) }, uniquingKeysWith: { $1 })
+        pointStates = Dictionary(layout.points.map { ($0, PointRuntimeState(direction: .single, reservedByTrain: nil)) }, uniquingKeysWith: { $1 })
         
         // Reset all points to default position or straight
         for point in layout.points {
             try await resetPoint(point)
         }
         
-        signalStates = layout.signals.reduce(into: [:], { result, signal in
-            result[signal] = .init((.off, .off))
-        })
+        signalStates = Dictionary(layout.signals.map { ($0, (SignalState.off, SignalState.off)) }, uniquingKeysWith: { $1 })
         
         // Send MQTT updates
         for block in layout.blocks {
@@ -117,8 +104,9 @@ actor LayoutTrackStateService {
     }
     
     func setSignalState(_ signal: Signal, home: SignalState, distant: SignalState?) async throws {
-        try await signal.setState(home: home, distant: distant ?? .off)
-        signalStates[signal] = (home, distant ?? .off)
+        let distant = distant ?? .off
+        try await signal.setState(home: home, distant: distant)
+        signalStates[signal] = (home, distant)
 
         // Telemetry: a publish failure must not fail the signal update
         try? await MQTTManager.shared.sendSignalState(signal: signal, state: home)
@@ -127,12 +115,10 @@ actor LayoutTrackStateService {
     // Will not be called if layout is dormant
     func updateSignals() async throws {
         let snapshot = await snapshot()
-        let signalStates = try SignalCoordinator.refresh(snapshot: snapshot)
+        let changedSignals = try SignalCoordinator.refresh(snapshot: snapshot)
 
-        for changedSignal in signalStates {
-            try await setSignalState(changedSignal.key,
-                                     home: changedSignal.value.0,
-                                     distant: changedSignal.value.1)
+        for (signal, (home, distant)) in changedSignals {
+            try await setSignalState(signal, home: home, distant: distant)
         }
     }
 
@@ -145,10 +131,7 @@ actor LayoutTrackStateService {
         guard let blockState = blockStates[block] else {
             throw TrainError.applicationError("No state for block \(block)")
         }
-        switch blockState {
-        case .occupied(let train, _), .reserved(let train, _), .vacating(let train, _): return train
-        default: return nil
-        }
+        return blockState.train
     }
     
     func setStateForTrain(_ train: Train, state: TrainRuntimeState) async throws {
@@ -363,10 +346,10 @@ actor LayoutTrackStateService {
         
         log.verbose("Point \(point.id) set to \(newDirection)")
         
-        guard let newState = pointStates[point]?.newStateWithDirection(newDirection) else {
+        guard pointStates[point] != nil else {
             throw TrainError.unexpectedTrackState("No state for point \(point.id)")
         }
-        pointStates[point] = newState
+        pointStates[point]!.direction = newDirection
         
         try await point.setDirection(newDirection)
 
@@ -393,10 +376,9 @@ actor LayoutTrackStateService {
     func setReservedTrainForPoint(_ point: Point, to: Train?, associatedStartBlock: Block?) async throws {
         log.info("Point \(point) set to reserved \(to, default: "None")")
 
-        if reservedTrainForPoint(point) != nil && to != nil {
-            throw TrainError.invalidBlockStateChange("Point \(point.id) already reserved by train \(reservedTrainForPoint(point)!), cannot reserve for \(to!)")
+        if let holder = reservedTrainForPoint(point), let to {
+            throw TrainError.invalidBlockStateChange("Point \(point.id) already reserved by train \(holder), cannot reserve for \(to)")
         }
-
         
         pointStates[point]?.reservedByTrain = to
         pointStates[point]?.freeWithBlock = associatedStartBlock
