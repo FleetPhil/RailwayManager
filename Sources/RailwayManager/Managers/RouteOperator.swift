@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CollectionConcurrencyKit
 
 enum RouteState: Equatable {
     case dormant
@@ -183,7 +182,6 @@ actor RouteOperator {
             }
         }
         
-        
         if newSpeed != lastCommandedTrainSpeed {
             let trainDirection = try await trainController.trainDirection(train)
             log.info("Train speed is \(newSpeed) \(trainDirection) (was \(lastCommandedTrainSpeed))")
@@ -195,10 +193,9 @@ actor RouteOperator {
     
     // Stop the train immediately
     private func stopTrain() async throws {
-        // Record the stop so the next speed calculation always sends a fresh command
-        
         log.info("Train \(train) stopped (was \(lastCommandedTrainSpeed))")
         
+        // Record the stop so the next speed calculation always sends a fresh command
         lastCommandedTrainSpeed = .stop
         try await trainController.setSpeedforTrain(train, speed: .stop)
     }
@@ -408,7 +405,6 @@ actor RouteOperator {
         }
     }
     
-    
     private func handleFrontAtFromBlockEnd(_ sensor: Sensor, pathItem: PathItem) async throws {
         // The front of the train is at the end of the from block
         // Check if we should stop
@@ -417,10 +413,6 @@ actor RouteOperator {
             // Stop and wait as this is the end of a block
             try await stopTrain()
             try await setTrainState(.stoppedForResource(trackResource, pathItem))
-            
-        case .stoppingAtSensor(let stopSensor, _) where sensor == stopSensor:
-            try await stopTrain()
-            try await setTrainState(.stoppedAtSensor(sensor))
             
         default:
             // Nothing to do, the train is not stopping at the end of this block
@@ -530,7 +522,7 @@ actor RouteOperator {
         // No more processing for now
     }
          
-    private func processNextFrontPathItem() async throws  {
+    private func processNextFrontPathItem() async throws {
         let isRouteStart = frontItem == nil
         let trainState = try await trainController.trainState(train)
         
@@ -691,8 +683,6 @@ actor RouteOperator {
         try await stateService.setStateForBlock(block, newState: .vacant)
         try await stateService.releaseDirectionLock(block: block, train: train)
         
-        // Free any
-        
         // The rear moves on to the next path item
         rearItems.removeFirst()
     }
@@ -711,12 +701,4 @@ actor RouteOperator {
             throw TrainError.invalidRoute("\(rd): \(route): Attempt to run route in ending state")
         }
     }
-}
-
-extension TimeInterval {
-    // Return a timeinterval +- x% of the given interval
-    func randomInterval(factor: Double = 0.3) -> TimeInterval {
-        return TimeInterval.random(in: self * (1 - factor) ... self * (1 + factor))
-    }
-
 }

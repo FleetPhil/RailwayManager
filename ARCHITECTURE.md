@@ -13,7 +13,7 @@ A Swift 6 command-line controller for a model railway (the "Final26" layout). It
 
 Package: `swift-tools-version 6.1`, Swift language mode 6, platforms macOS 15 / iOS 16 (Linux code paths also exist). Single executable target `RailwayManager`.
 
-Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global `log`), mqtt-nio, CollectionConcurrencyKit. SunCalc is declared but not used.
+Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global `log`), mqtt-nio, CollectionConcurrencyKit (declared but no longer imported). SunCalc is declared but not used.
 
 ~7,200 lines (about 5,000 of code, excluding comments and blank lines) across 51 Swift files.
 
@@ -159,13 +159,13 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Path avoidance looks only at the blocks and points on each block route, not the contiguous blocks beyond (which `reservePathItem` checks), and at blocks held by other trains anywhere ahead, so a train standing far ahead can cause a detour; the path is worked out again at every block, so the train returns to the shortest path once it is clear. A waiting train only looks for a new path when the resource it is waiting for is freed, or, when waiting to enter its segment's end block, when one of the blocks the segment can end in is freed (`handleFreedResource`).
 - Speed-change delay should depend on block length.
 - Loops are not reserved as a unit: a second train can take a loop's exit block while the first is in the loop, and neither can then move (section 11, loop reservation step 3).
-- `stoppingAtSensor` and `waiting` train states are handled but never set; `didEndTimer`, buttons 1 and 5 unused.
+- `stoppingAtSensor` and `waiting` train states are never set (RouteOperator no longer handles `stoppingAtSensor`; `TrainRuntimeState` and `SignalTrackState` still do); `didEndTimer`, buttons 1 and 5 unused.
 - `processVacatedBlock` has an unfinished "Free any" comment.
 - Lights (`Light`, `Block.associatedLights`, `CBUSManager.setLight/setClocks/setLED`) are stubs.
 - All signals in `Final26` have address 0 (not wired yet), and it has no block lengths, so `checkLoopLengths` can't check it.
 
 **Dead / legacy code**
-- `Resources/params.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `TimeInterval.randomInterval`, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `TestTrack2`, `TramSplit`, SunCalc dependency.
+- `Resources/params.json` (older schema, unread), `RailwayHardware.swift` (commented-out protocol), `CBUSHardwarePoint`, `CBUSManager.setPoint/resetPoint/setSignal(_:state:)`, `SignalCoordinator` instance (only statics used), `LayoutEvent.isRouteEvent/didChangeSignals`, `LayoutEventType`, `Queue`, async Sequence helpers, `PathItem.initialPathItemForBlock`, `setDirectionForVacantContiguousBlocks`, `TrainError.noLockToRelease` (never thrown), `setReserveTrainForPointID`, `LayoutTrackStateService.nextActiveBlock` (duplicated in `SignalTrackState`), `TestTrack2`, `TramSplit`, SunCalc dependency.
 - `.swiftpm/xcode/ModelRailwayHardware/` held an older standalone copy of the hardware package, since merged into `Sources/ModelRailwayHardware/`. The folder is now empty, but the repo still tracks it as a submodule gitlink (mode 160000) with no `.gitmodules` entry, so `git submodule` commands fail. `git rm --cached .swiftpm/xcode/ModelRailwayHardware` removes the orphan entry.
 
 **Design observations**
