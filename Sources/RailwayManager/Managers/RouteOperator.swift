@@ -316,7 +316,7 @@ actor RouteOperator {
             // Sensor at the back of the train is at the start of the to block in the current path
             // So train is clear of the previous block and any turnouts etc
             // There could be more than 1 vacating block, only vacate the one where the sensor is
-            try await processVacatedBlock(train: train, block: rearItem.fromBlock)
+            try await processVacatedBlock(rearItem.fromBlock)
         }
         
         // The rear passing the start of the end block: the train is wholly in it
@@ -457,7 +457,7 @@ actor RouteOperator {
                 rearItems[rearItems.count - 1] = item
             }
             
-            routeState = try await requestPathItem(item)
+            try await resumeWithPathItem(item)
 
         default:
             break
@@ -648,18 +648,20 @@ actor RouteOperator {
         return (shortestPath.pathItems[0], toBlock)
     }
     
-    private func requestPathItem(_ item: PathItem) async throws -> RouteState {
+    // Retry the path item after a resource was freed: move on if it can now be reserved (the route is
+    // active again), otherwise stop and keep waiting, leaving the route state unchanged
+    private func resumeWithPathItem(_ item: PathItem) async throws {
         if let blockingResource = try await reserveOrRun(item) {
             // Stop the train if it is moving (normally stopped) and wait for the resource to be freed
             try await stopForResource(blockingResource, item: item)
-            return routeState       // Still waiting: leave the route state unchanged
+            return
         }
         
         // No blocking resource: update the state to reflect the new item
         try await stateService.setStateForBlock(item.fromBlock, newState : .occupied(train, item.fromDirection))
         try await setTrainSpeed(inBlock: item.fromBlock)
         
-        return .active
+        routeState = .active
     }
     
     // Try to reserve the path item, returning the blocking resource if the reservation failed.
@@ -677,7 +679,7 @@ actor RouteOperator {
     }
     
     // The train has exited the toBlock on the rear path item
-    private func processVacatedBlock(train: Train, block: Block) async throws {
+    private func processVacatedBlock(_ block: Block) async throws {
         guard try await stateService.trainForBlock(block) == train else {
             throw TrainError.applicationError("Train \(train) is not valid for vacated block \(block)")
         }

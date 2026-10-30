@@ -123,8 +123,8 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
    - front inside `toBlock` → `checkForTrainStop` (timer stop, or `endRoute` if `.ending`);
    - front at end of `fromBlock` while still waiting → stop (`stoppedForResource`/`stoppedAtSensor`) or mark vacating;
    - rear at start of `toBlock` of the first of `rearItems` → its `fromBlock` vacant, direction lock released, item removed.
-5. `didFreeResource` → every operator waiting on that resource works its next path item out again (nothing was reserved for it, so it may now take a different path) and retries (`requestPathItem`).
-6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (exit and end signal for the train's travel direction in that block) (stop→slow, diverging→normal, distant stop→normal, else fast; no signal at the exit→normal). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `requestPathItem` stops the train and returns without touching speed or route state.
+5. `didFreeResource` → every operator waiting on that resource works its next path item out again (nothing was reserved for it, so it may now take a different path) and retries (`resumeWithPathItem`).
+6. Speed (`setTrainSpeed`) is derived from train state, block exit and the end signal aspect (exit and end signal for the train's travel direction in that block) (stop→slow, diverging→normal, distant stop→normal, else fast; no signal at the exit→normal). `lastCommandedTrainSpeed` tracks the last speed sent; `stopTrain()` resets it to `.stop`, so the next calculation always re-sends a speed. If a retry after a freed resource is still blocked, `resumeWithPathItem` stops the train and returns without touching speed or route state; if it succeeds it sets the route state to active.
 7. Stops: the path item reaching the end of a segment with a `waitTime` stops at the block's station sensor (delay = half train length / speed) or its end sensor. With `stopAt: .entered` the stop sensor is the block's start sensor in the direction of travel, matched only when the **rear** sets it (`isStoppingOnEntry`; other front sensors in the block are ignored, except the end sensor, which stops a train longer than the block with a warning). Stopped there, the start sensor is the block's end after a reversal, so a blocked train stays `stoppedForResource`. Last segment → `.ending` → `endRoute`: stop, idle, free all other blocks held by the train (the train is idle in the stop sensor's block), wait, light off, release session, `.ended`, publish `didEndRoute`.
 8. When no operators are active, `LayoutManager` schedules a **dormant** shutdown after 10 s (cancelled if a route starts): stop trains, signals off.
 
@@ -160,7 +160,6 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Speed-change delay should depend on block length.
 - Loops are not reserved as a unit: a second train can take a loop's exit block while the first is in the loop, and neither can then move (section 11, loop reservation step 3).
 - `stoppingAtSensor` and `waiting` train states are never set (RouteOperator no longer handles `stoppingAtSensor`; `TrainRuntimeState` and `SignalTrackState` still do); `didEndTimer`, buttons 1 and 5 unused.
-- `processVacatedBlock` has an unfinished "Free any" comment.
 - Lights (`Light`, `Block.associatedLights`, `CBUSManager.setLight/setClocks/setLED`) are stubs.
 - All signals in `Final26` have address 0 (not wired yet), and it has no block lengths, so `checkLoopLengths` can't check it.
 
