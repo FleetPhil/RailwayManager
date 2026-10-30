@@ -19,8 +19,8 @@ extension RailwayManager {
     
     // From D (where train 1 starts) to F forward, then on round to D
     private static func finalRoute(layout: Layout) throws -> Route {
-        let segment1 = Segment(toBlock: layout.block("F"), direction: .forward, waitTime: .halt)
-        let segment2 = Segment(toBlock: layout.block("D"), direction: .forward, waitTime: .station)
+        let segment1 = Segment(toBlock: layout.block("L"), direction: .forward, waitTime: .halt, stopAt: .entered)
+        let segment2 = Segment(toBlock: layout.block("M"), direction: .reverse, waitTime: .station)
         let route1 = Route(id: 1, segments: [segment1, segment2])
         
         log.info("Route is \(route1)")

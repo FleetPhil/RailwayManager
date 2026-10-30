@@ -185,7 +185,8 @@ actor RouteOperator {
         
         
         if newSpeed != lastCommandedTrainSpeed {
-            log.info("Train speed is \(newSpeed) (was \(lastCommandedTrainSpeed))")
+            let trainDirection = try await trainController.trainDirection(train)
+            log.info("Train speed is \(newSpeed) \(trainDirection) (was \(lastCommandedTrainSpeed))")
             lastCommandedTrainSpeed = newSpeed
             
             try await trainController.setSpeedforTrain(train, speed: lastCommandedTrainSpeed, delay: delay)
