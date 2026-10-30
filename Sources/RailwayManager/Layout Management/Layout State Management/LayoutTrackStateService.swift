@@ -172,22 +172,24 @@ actor LayoutTrackStateService {
     }
     
     func releaseDirectionLock(block: Block, train: Train) async throws {
-        // Release any direction lock for this train and block
-        guard let locks = directionLocks[block] else { return }
-        
-        if let trainIndex = locks.firstIndex(where: { $0.train == train }) {
-            directionLocks[block]!.remove(at: trainIndex)
-            if directionLocks[block]!.isEmpty {
-                directionLocks[block] = nil
-            }
-            
+        if removeDirectionLock(block: block, train: train) {
             // Publish change
             try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: blockStates[block]!, directionLocks: lockedTrains(block))
         }
     }
+    
+    // Remove any direction lock for this train and block, returning whether there was one
+    private func removeDirectionLock(block: Block, train: Train) -> Bool {
+        guard let trainIndex = directionLocks[block]?.firstIndex(where: { $0.train == train }) else { return false }
+        directionLocks[block]!.remove(at: trainIndex)
+        if directionLocks[block]!.isEmpty {
+            directionLocks[block] = nil
+        }
+        return true
+    }
 
-    private func setDirectionLock(block: Block, train: Train, direction: BlockDirection) async throws {
-        // Set the direction lock for this train and block - which must not exist
+    // Add the direction lock for this train and block - which must not exist
+    private func addDirectionLock(block: Block, train: Train, direction: BlockDirection) throws {
         let locks = directionLocks[block] ?? []
         if locks.contains(where: { $0.train == train }) {
             throw TrainError.lockAlreadyExists(block, train)
@@ -196,16 +198,13 @@ actor LayoutTrackStateService {
             throw TrainError.applicationError("Can't lock block \(block) for train \(train): locked in opposite direction")
         }
         directionLocks[block, default: []].append(DirectionLock(train: train, direction: direction))
-        
-        // Publish change
-        try? await MQTTManager.shared.sendBlockRuntimeState(block: block, blockState: .vacant, directionLocks: lockedTrains(block))
     }
 
     // Path Item is a block-block transition, maybe involving 1 or more points
     // This function is called when the next transition is required
     func reservePathItem(_ item: PathItem, forTrain: Train) async throws -> TrackResource? {
         
-        // MARK: Critical section: no awaits until all resources are marked reserved
+        // MARK: Critical section: no awaits until all resources are marked reserved (telemetry is sent after it)
         
         let oldState = blockStates[item.toBlock] ?? .vacant
         switch oldState {
@@ -241,24 +240,36 @@ actor LayoutTrackStateService {
 
         // All checks passed: mark the block, direction locks and points reserved
         log.info("Block \(item.toBlock) state request from \(oldState) to \(BlockRuntimeState.reserved(forTrain, item.toDirection))")
-        if oldState.isVacant {
-            // Clear any existing lock on this block for this train
-            try await releaseDirectionLock(block: item.toBlock, train: forTrain)
-        }
+        // Clear any existing lock on this block for this train
+        let isLockReleased = oldState.isVacant && removeDirectionLock(block: item.toBlock, train: forTrain)
         blockStates[item.toBlock] = .reserved(forTrain, item.toDirection)
         
+        var lockedBlocks: [Block] = []
         for (vacantBlock, blockDirection) in contiguousBlocks where blockStates[vacantBlock]?.isVacant ?? true {
             if directionLocks[vacantBlock]?.contains(where: { $0.train == forTrain }) == true {
                 throw TrainError.lockAlreadyExists(vacantBlock, forTrain)
             }
             // Lock directions were checked above, so the lock can be added
-            try await setDirectionLock(block: vacantBlock, train: forTrain, direction: blockDirection)
+            try addDirectionLock(block: vacantBlock, train: forTrain, direction: blockDirection)
+            lockedBlocks.append(vacantBlock)
         }
         
-        for point in item.pointSettings.map( \.point ) {
-            try await setReservedTrainForPoint(point, to: forTrain, associatedStartBlock: item.fromBlock)
+        let points = item.pointSettings.map(\.point)
+        for point in points {
+            try updatePointReservation(point, to: forTrain, associatedStartBlock: item.fromBlock)
         }
         // MARK: End critical section
+        
+        // Telemetry for the changes above, in the order they were made
+        if isLockReleased {
+            try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: oldState, directionLocks: lockedTrains(item.toBlock))
+        }
+        for lockedBlock in lockedBlocks {
+            try? await MQTTManager.shared.sendBlockRuntimeState(block: lockedBlock, blockState: .vacant, directionLocks: lockedTrains(lockedBlock))
+        }
+        for point in points {
+            await publishPointReservation(point, associatedStartBlock: item.fromBlock)
+        }
         
         // Command the point hardware - this will sleep the task so don't move it up
         for pointSetting in item.pointSettings {
@@ -308,14 +319,7 @@ actor LayoutTrackStateService {
     }
     
     func setReservedTrainForPoint(_ point: Point, to: Train?, associatedStartBlock: Block?) async throws {
-        log.info("Point \(point) set to reserved \(to, default: "None")")
-
-        if let holder = reservedTrainForPoint(point), let to {
-            throw TrainError.invalidBlockStateChange("Point \(point.id) already reserved by train \(holder), cannot reserve for \(to)")
-        }
-        
-        pointStates[point]?.reservedByTrain = to
-        pointStates[point]?.freeWithBlock = associatedStartBlock
+        try updatePointReservation(point, to: to, associatedStartBlock: associatedStartBlock)
         
         if to == nil {      // If point is freed
             if let defaultPosition = point.defaultPosition {
@@ -327,7 +331,23 @@ actor LayoutTrackStateService {
             }
         }
         
-        // Send telemetry
+        await publishPointReservation(point, associatedStartBlock: associatedStartBlock)
+    }
+    
+    // Reserve the point for the train, or free it if nil, throwing if it is reserved by another train
+    private func updatePointReservation(_ point: Point, to: Train?, associatedStartBlock: Block?) throws {
+        log.info("Point \(point) set to reserved \(to, default: "None")")
+
+        if let holder = reservedTrainForPoint(point), let to {
+            throw TrainError.invalidBlockStateChange("Point \(point.id) already reserved by train \(holder), cannot reserve for \(to)")
+        }
+        
+        pointStates[point]?.reservedByTrain = to
+        pointStates[point]?.freeWithBlock = associatedStartBlock
+    }
+    
+    // Send telemetry for a point reservation change
+    private func publishPointReservation(_ point: Point, associatedStartBlock: Block?) async {
         if let direction = pointStates[point]?.direction {
             try? await MQTTManager.shared.sendPointState(point: point, state: direction, associatedBlock: associatedStartBlock?.id)
         }

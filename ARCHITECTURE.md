@@ -68,7 +68,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Singletons: `CBUSManager.shared`, `MQTTManager.shared`, `LayoutEventHub.shared`, `Led.shared`.
 - `GlobalOptions` holds `nonisolated(unsafe)` statics set once at startup.
 - `LayoutManager` spawns a new `Task` **per event** so long-running handlers (e.g. waiting for a DCC session) don't block the loop. Consequence: events can be processed concurrently/out of order; actors serialise access but interleave at every `await` (reentrancy).
-- `LayoutTrackStateService.reservePathItem` has an explicit **no-await critical section** for check-and-reserve to prevent two trains reserving the same resources.
+- `LayoutTrackStateService.reservePathItem` has an explicit **no-await critical section** for check-and-reserve to prevent two trains reserving the same resources: the block state, direction locks and point reservations are all set synchronously (`removeDirectionLock`, `addDirectionLock`, `updatePointReservation`), and their MQTT telemetry is sent after the section, in the same order.
 
 ### Background tasks (started in `LayoutManager.init`)
 1. Event loop over `LayoutEventHub` (`eventLoopTask`).
