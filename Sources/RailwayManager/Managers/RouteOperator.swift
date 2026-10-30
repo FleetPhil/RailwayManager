@@ -91,6 +91,12 @@ actor RouteOperator {
         currentSegment.waitTime
     }
     
+    // The front is in (or heading for) the segment's end block, and the segment stops as soon as the
+    // train is wholly in it: the stop is made when the rear passes the start of the block
+    private var isStoppingOnEntry: Bool {
+        frontItem != nil && frontItem?.toBlock == frontItemEndBlock && currentSegment.stopAt == .entered
+    }
+    
     // MARK: - Route lifecycle
     
     func resetRoute(route: Route, startBlock: Block) async throws {
@@ -189,6 +195,9 @@ actor RouteOperator {
     // Stop the train immediately
     private func stopTrain() async throws {
         // Record the stop so the next speed calculation always sends a fresh command
+        
+        log.info("Train \(train) stopped (was \(lastCommandedTrainSpeed))")
+        
         lastCommandedTrainSpeed = .stop
         try await trainController.setSpeedforTrain(train, speed: .stop)
     }
@@ -282,7 +291,7 @@ actor RouteOperator {
                 try await processOccupiedRouteBlock()
             } else if sensor.block == frontItem.toBlock {
                 // Sensor is at the front of the train in the to block but after the start of block sensor
-                try await checkForTrainStop(sensor)
+                try await checkForTrainStop(sensor, byRear: false, isEndOfBlock: isEndOfBlock)
             } else if isEndOfBlock && sensor.block == frontItem.fromBlock {
                 // Sensor is at the front of the train at the end of the from block
                 // Path has not incremented forward so likely this is because of a resource conflict
@@ -299,11 +308,26 @@ actor RouteOperator {
                 
                 try await processVacatedBlock(train: train, block: rearItem.fromBlock)
             }
+            
+            // The rear passing the start of the end block: the train is wholly in it
+            if isStartOfBlock && isStoppingOnEntry && sensor.block == frontItemEndBlock {
+                try await checkForTrainStop(sensor, byRear: true, isEndOfBlock: isEndOfBlock)
+            }
         }
     }
     
     // check if we should stop at this sensor at a segment end
-    private func checkForTrainStop(_ sensor: Sensor) async throws {
+    private func checkForTrainStop(_ sensor: Sensor, byRear: Bool, isEndOfBlock: Bool) async throws {
+        // A segment that stops once the train is wholly in its end block stops when the rear passes the
+        // start sensor. The front reaching the end of the block first means the train is longer than the
+        // block: stop there instead. Any other front sensor is ignored
+        var isLongTrainStop = false
+        if isStoppingOnEntry && !byRear {
+            guard isEndOfBlock else { return }
+            log.warning("\(rd): Train \(train) reached the end of block \(sensor.block) before it was wholly in it: stopping")
+            isLongTrainStop = true
+        }
+        
         // Check for the last block of the route
         if routeState == .ending {
             try await endRoute(atSensor: sensor)
@@ -312,7 +336,7 @@ actor RouteOperator {
         
         // Check if we should stop at this sensor for a timer
         if case .stoppingForTimer(let stopSensor, let timer) = try await trainController.trainState(train),
-                  sensor == stopSensor {
+                  sensor == stopSensor || isLongTrainStop {
             let stopDelay = stopDelay(sensor: stopSensor)
             if stopDelay > 0 {
                 try await Task.sleep(for: .seconds(stopDelay))
@@ -468,11 +492,18 @@ actor RouteOperator {
         
         // We are stopping in toBlock
         
-        // Identify the sensor that we will be stopping at:
-        // If there is a station sensor in the block use that, otherwise use the end sensor
+        // Identify the sensor that we will be stopping at: when stopping on entry the start sensor (set by the rear);
+        // otherwise if there is a station sensor in the block use that, otherwise use the end sensor
+        let stopAt = currentSegment.stopAt
         var stopSensor: Sensor {
             get throws {
-                if let stationSensor = layout.stationSensorForBlock(frontItem.toBlock) {
+                if stopAt == .entered {
+                    let toDirection = frontItem.toDirection
+                    guard let startSensor = layout.sensorForBlock(frontItem.toBlock, atBlockStart: true, inDirection: toDirection) else {
+                        throw TrainError.applicationError("No start sensor for block \(frontItem.toBlock), \(toDirection)")
+                    }
+                    return startSensor
+                } else if let stationSensor = layout.stationSensorForBlock(frontItem.toBlock) {
                     return stationSensor
                 } else {
                     // The train stops at the end of toBlock in the direction it enters it

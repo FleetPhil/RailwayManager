@@ -267,7 +267,8 @@ struct RailwayManager: ParsableCommand {
             }
             segments.append(Segment(toBlock: layout.block(segmentParams.toBlock),
                                     direction: segmentParams.direction,
-                                    waitTime: segmentParams.waitTime))
+                                    waitTime: segmentParams.waitTime,
+                                    stopAt: segmentParams.stopAt ?? .end))
         }
         
         let route = Route(id: routeParams.routeID, segments: segments, initialDCCDirection: routeParams.initialDCCDirection)
@@ -294,7 +295,7 @@ struct RailwayManager: ParsableCommand {
                 try await Task.sleep(for: .seconds(1))
                 await LayoutEventHub.shared.publish(.didUnsetSensor(sensorAddress, first))
                 
-                try await Task.sleep(for: .seconds(1))
+                try await Task.sleep(for: .seconds(3))
                 await LayoutEventHub.shared.publish(.didSetSensor(sensorAddress, second))
                 
                 try await Task.sleep(for: .seconds(1))
@@ -350,14 +351,20 @@ struct RailwayManager: ParsableCommand {
             }
         }
 
-        if input.starts(with: "rr") {            // Run route: rr <toBlock> <f|r> [train]
-            let args = input.dropFirst(2).split(separator: " ").map(String.init)
+        if input.starts(with: "rr") {            // Run route: rr <toBlock> <f|r> [train] [e]
+            var args = input.dropFirst(2).split(separator: " ").map(String.init)
+
+            // A trailing e stops the train as soon as it is wholly in toBlock
+            let stopAt: StopPosition = args.last == "e" ? .entered : .end
+            if stopAt == .entered {
+                args.removeLast()
+            }
 
             // Train id is optional and defaults to 1
             guard args.count == 2 || args.count == 3,
                   let direction: BlockDirection = ["f": .forward, "r": .reverse][args[1]],
                   let trainID = args.count == 3 ? Int(args[2]) : 1 else {
-                log.error("Usage: rr <toBlock> <f|r> [train]")
+                log.error("Usage: rr <toBlock> <f|r> [train] [e]")
                 return
             }
 
@@ -369,7 +376,7 @@ struct RailwayManager: ParsableCommand {
                 command: .runRoute,
                 routeID: 1,
                 trainID: trainID,
-                segments: [.init(toBlock: toBlock, direction: direction, waitTime: .halt)])
+                segments: [.init(toBlock: toBlock, direction: direction, waitTime: .halt, stopAt: stopAt)])
 
             // A rejected route is logged so that the console keeps running
             do {

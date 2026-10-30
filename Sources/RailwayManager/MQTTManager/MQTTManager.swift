@@ -384,6 +384,7 @@ extension MQTTManager {
             var toBlock: String
             var direction: BlockDirection
             var waitTime: WaitTime?         // No stop at segment end if nil
+            var stopAt: StopPosition?       // Stop at the end of the block if nil
         }
         
         // MARK: Commands for the railway manager
