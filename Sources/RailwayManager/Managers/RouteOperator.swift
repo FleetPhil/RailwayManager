@@ -286,37 +286,42 @@ actor RouteOperator {
         let startEndText = isStartOfBlock ? "start" : isEndOfBlock ? "end" : "mid"
         log.info("Sensor \(sensor) \(orientation) set at \(startEndText) of block \(sensor.block) for train \(train) ")
         
-        // MARK: Sensor set scenarios
         switch trainSensor {
-        case .front:
-            guard let frontItem else { break }      // Route not started
-            if isStartOfBlock && sensor.block == frontItem.toBlock {
-                // Start of the next block in the path
-                try await processOccupiedRouteBlock()
-            } else if sensor.block == frontItem.toBlock {
-                // Sensor is at the front of the train in the to block but after the start of block sensor
-                try await checkForTrainStop(sensor, byRear: false, isEndOfBlock: isEndOfBlock)
-            } else if isEndOfBlock && sensor.block == frontItem.fromBlock {
-                // Sensor is at the front of the train at the end of the from block
-                // Path has not incremented forward so likely this is because of a resource conflict
-                // check if the train should stop
-                try await handleFrontAtFromBlockEnd(sensor, pathItem: frontItem)
-            }
-            
-        case .rear:
-            guard let rearItem = rearItems.first else { break }     // Rear has cleared every item so far
-            if isStartOfBlock && sensor.block == rearItem.toBlock {
-                // Sensor at the back of the train is at the start of the to block in the current path
-                // So train is clear of the previous block and any turnouts etc
-                // There could be more than 1 vacating block, only vacate the one where the sensor is
-                
-                try await processVacatedBlock(train: train, block: rearItem.fromBlock)
-            }
-            
-            // The rear passing the start of the end block: the train is wholly in it
-            if isStartOfBlock && isStoppingOnEntry && sensor.block == frontItemEndBlock {
-                try await checkForTrainStop(sensor, byRear: true, isEndOfBlock: isEndOfBlock)
-            }
+        case .front:    try await handleFrontSensor(sensor, isStartOfBlock: isStartOfBlock, isEndOfBlock: isEndOfBlock)
+        case .rear:     try await handleRearSensor(sensor, isStartOfBlock: isStartOfBlock, isEndOfBlock: isEndOfBlock)
+        }
+    }
+    
+    // The front of the train has set a sensor
+    private func handleFrontSensor(_ sensor: Sensor, isStartOfBlock: Bool, isEndOfBlock: Bool) async throws {
+        guard let frontItem else { return }      // Route not started
+        if isStartOfBlock && sensor.block == frontItem.toBlock {
+            // Start of the next block in the path
+            try await processOccupiedRouteBlock()
+        } else if sensor.block == frontItem.toBlock {
+            // Sensor is at the front of the train in the to block but after the start of block sensor
+            try await checkForTrainStop(sensor, byRear: false, isEndOfBlock: isEndOfBlock)
+        } else if isEndOfBlock && sensor.block == frontItem.fromBlock {
+            // Sensor is at the front of the train at the end of the from block
+            // Path has not incremented forward so likely this is because of a resource conflict
+            // check if the train should stop
+            try await handleFrontAtFromBlockEnd(sensor, pathItem: frontItem)
+        }
+    }
+    
+    // The rear of the train has set a sensor
+    private func handleRearSensor(_ sensor: Sensor, isStartOfBlock: Bool, isEndOfBlock: Bool) async throws {
+        guard let rearItem = rearItems.first else { return }     // Rear has cleared every item so far
+        if isStartOfBlock && sensor.block == rearItem.toBlock {
+            // Sensor at the back of the train is at the start of the to block in the current path
+            // So train is clear of the previous block and any turnouts etc
+            // There could be more than 1 vacating block, only vacate the one where the sensor is
+            try await processVacatedBlock(train: train, block: rearItem.fromBlock)
+        }
+        
+        // The rear passing the start of the end block: the train is wholly in it
+        if isStartOfBlock && isStoppingOnEntry && sensor.block == frontItemEndBlock {
+            try await checkForTrainStop(sensor, byRear: true, isEndOfBlock: isEndOfBlock)
         }
     }
     
