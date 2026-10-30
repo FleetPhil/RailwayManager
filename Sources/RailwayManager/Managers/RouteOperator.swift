@@ -104,7 +104,7 @@ actor RouteOperator {
         if let initialDCCDirection = route.initialDCCDirection {
             await trainController.setTrainFacing(train, dccDirection: initialDCCDirection, travelling: route.initialDirection)
         }
-        try await stateService.setStateForTrain(train, state: .idle(startBlock))
+        try await setTrainState(.idle(startBlock))
         try await stateService.setStateForBlock(startBlock, newState: .occupied(train, route.initialDirection))
         
         // The first path item is worked out at route start
@@ -556,7 +556,7 @@ actor RouteOperator {
                 try await stopForResource(blockingResource, item: nextItem)
                 return
             }
-            try await stateService.setStateForTrain(train, state: .stoppingForResource(blockingResource))
+            try await setTrainState(.stoppingForResource(blockingResource))
         } else {
             // Set the points on this path without default values
             for setting in nextItem.pointSettings where setting.point.defaultPosition == nil {

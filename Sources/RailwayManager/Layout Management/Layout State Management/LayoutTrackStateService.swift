@@ -134,19 +134,6 @@ actor LayoutTrackStateService {
         return blockState.train
     }
     
-    func setStateForTrain(_ train: Train, state: TrainRuntimeState) async throws {
-        if await trainController.isNewTrain(train) {
-            log.verbose("Train \(train) state request from none to \(state)")
-        } else {
-            let oldState = try await trainController.trainState(train)
-            if oldState == state { return }
-            
-            log.verbose("Train \(train) state request from \(oldState, default: "none") to \(state)")
-        }
-        
-        try await trainController.setTrainState(train, state: state)
-    }
-    
     // Validate the transition and set the new state, throwing if the transition is not allowed
     func setStateForBlock(_ block: Block, newState: BlockRuntimeState) async throws {
         let oldState = blockStates[block] ?? .vacant
@@ -252,7 +239,7 @@ actor LayoutTrackStateService {
         }
     }
 
-    func setDirectionLock(block: Block, train: Train, direction: BlockDirection) async throws {
+    private func setDirectionLock(block: Block, train: Train, direction: BlockDirection) async throws {
         // Set the direction lock for this train and block - which must not exist
         let locks = directionLocks[block] ?? []
         if locks.contains(where: { $0.train == train }) {
@@ -369,7 +356,7 @@ actor LayoutTrackStateService {
         }
     }
 
-    func reservedTrainForPoint(_ point: Point) -> Train? {
+    private func reservedTrainForPoint(_ point: Point) -> Train? {
         return pointStates[point]?.reservedByTrain
     }
     

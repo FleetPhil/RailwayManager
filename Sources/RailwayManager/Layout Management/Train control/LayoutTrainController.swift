@@ -143,10 +143,6 @@ actor LayoutTrainController {
         trainDirections[train] = direction
     }
     
-    func isNewTrain(_ train: Train) -> Bool {
-        trainStates[train] == nil
-    }
-    
     func trainState(_ train: Train) throws -> TrainRuntimeState {
         guard let state = trainStates[train] else {
             throw TrainError.applicationError("No runtime state for train \(train.id)")
