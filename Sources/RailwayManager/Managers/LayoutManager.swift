@@ -193,7 +193,7 @@ actor LayoutManager: Sendable {
         } else {
             // No route operator for this train
             log.debug("Creating route operator for train \(train.name) (\(train))")
-            let routeOperator = try await RouteOperator(
+            let routeOperator = RouteOperator(
                 route: route,
                 train: train,
                 layout: layout,

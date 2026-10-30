@@ -64,17 +64,12 @@ actor RouteOperator {
          layout: Layout,
          stateService: LayoutTrackStateService,
          trainController: LayoutTrainController,
-        ) async throws {
+        ) {
         self.route = route
         self.train = train
         self.layout = layout
         self.stateService = stateService
         self.trainController = trainController
-        
-        guard let routeDirection = route.segments.first?.direction else {
-            throw TrainError.noTrainDirection(train.id)
-        }
-        try await trainController.setTrainDirection(train, direction: routeDirection)
     }
     
     // MARK: - Current position accessors
@@ -84,10 +79,6 @@ actor RouteOperator {
     
     private var currentSegmentIsLast: Bool {
         frontSegmentIndex == route.segments.count - 1
-    }
-    
-    private var currentWaitTime: WaitTime? {
-        currentSegment.waitTime
     }
     
     // The front is in (or heading for) the segment's end block, and the segment stops as soon as the
@@ -245,7 +236,7 @@ actor RouteOperator {
     // Process the track event and execute route commands if able based on the layout state
     // Sensor set events are dispatched to handleSensorSet() from the layout manager
     func handleStartRouteEvent() async throws {
-        guard [RouteState.dormant, .ended].contains(routeState) else {
+        guard routeState.isInactive else {
             throw TrainError.trainAlreadyActive(train.id)
         }
         
@@ -372,7 +363,7 @@ actor RouteOperator {
             }
         }
         
-        if let waitTime = currentWaitTime {
+        if let waitTime = currentSegment.waitTime {
             try await Task.sleep(for: .seconds(waitTime.timeInterval))
         }
         
@@ -488,7 +479,7 @@ actor RouteOperator {
         
         // Check if we are stopping in this block, if not just carry on
         // We are stopping if this is the end of the segment and a wait time has been defined
-        guard frontItem.toBlock == frontItemEndBlock, let waitTime = currentWaitTime else {
+        guard frontItem.toBlock == frontItemEndBlock, let waitTime = currentSegment.waitTime else {
             try await processNextFrontPathItem()
             return
         }
