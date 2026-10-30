@@ -16,7 +16,6 @@ enum SignalTrackState {
     case indicatedBlockOccupiedOppositeDirection
     case signalBlockOccupiedIndicatedBlockVacant
     case signalBlockVacantIndicatedBlockVacant
-    case stoppingAtAssociatedSensor
     case nextBlockUnavailable
     case unexpectedState
 }
@@ -45,17 +44,6 @@ extension Signal {
             if signalBlockDirection != self.direction {
                 // Block is occupied in the opposite direction or unknown state
                 return .signalBlockOccupiedOppositeDirection
-            }
-            
-            // Check if the train is stopping at a sensor in the signal block
-            switch snapshot.trainState(train) {
-            case .stoppingAtSensor(let stopSensor, _):
-                if stopSensor.location.block == self.location {
-                    return .stoppingAtAssociatedSensor
-                } else {
-                    break
-                }
-            default:    break
             }
             
             // Train is moving through this block in the direction of the signal

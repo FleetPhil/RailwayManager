@@ -114,7 +114,6 @@ actor SignalCoordinator {
                 .signalBlockOccupiedOppositeDirection,
                 .indicatedBlockOccupiedSameDirection,
                 .indicatedBlockOccupiedOppositeDirection,
-                .stoppingAtAssociatedSensor,
                 .nextBlockUnavailable,
                 .unexpectedState:
                 return .stop

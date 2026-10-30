@@ -19,7 +19,6 @@ let package = Package(
         .package(url: "https://github.com/SwiftyBeaver/SwiftyBeaver.git", .upToNextMajor(from: "2.0.0")),
         .package(url: "https://github.com/Timac/SunCalc.git", from: "1.0.0"),
         .package(url: "https://github.com/swift-server-community/mqtt-nio.git", .upToNextMajor(from: "2.7.0")),
-        .package(url: "https://github.com/JohnSundell/CollectionConcurrencyKit.git", from: "0.1.0"),
     ],
     
     targets: [
@@ -33,7 +32,6 @@ let package = Package(
             "SunCalc",
             .product(name: "MQTTNIO", package: "mqtt-nio"),
             "SwiftSerial",
-            "CollectionConcurrencyKit",
         ],
         resources: [.process("Resources")]
             ),

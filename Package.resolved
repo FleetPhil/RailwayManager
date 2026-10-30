@@ -1,15 +1,6 @@
 {
-  "originHash" : "e0bad53d9b79b2536dc9fd90932141c86110adaa18ef58a06d6238f36e1f5851",
+  "originHash" : "7d7c423c0afa56eb63390e7614f7b44667bc57b959f22d0ed95d6d70d46e01b7",
   "pins" : [
-    {
-      "identity" : "collectionconcurrencykit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/JohnSundell/CollectionConcurrencyKit.git",
-      "state" : {
-        "revision" : "b4f23e24b5a1bff301efc5e70871083ca029ff95",
-        "version" : "0.2.0"
-      }
-    },
     {
       "identity" : "mqtt-nio",
       "kind" : "remoteSourceControl",

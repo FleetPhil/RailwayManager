@@ -14,7 +14,6 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
     // Stopping at sensor waiting for block or for other transition item before moving to Block
     case stoppingForResource(TrackResource)         // Blocking Resource
     case stoppedForResource(TrackResource, PathItem)              // Waiting for track resource, PathItem
-    case stoppingAtSensor(Sensor, Int)                         // Stopping on transition command after distance
     case stoppingForTimer(Sensor, WaitTime)
     case stoppedAtSensor(Sensor)
     
@@ -22,7 +21,7 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
         switch self {
         case .idle, .stoppedAtSensor, .stoppedForResource, .waiting:
             return false
-        case .running, .stoppingForResource, .stoppingAtSensor, .stoppingForTimer:
+        case .running, .stoppingForResource, .stoppingForTimer:
             return true
         }
     }
@@ -33,8 +32,7 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
         case .idle(let block):                          block
         case .running(let item):                        item.fromBlock
         case .stoppedForResource(_, let item):          item.fromBlock
-        case .stoppingAtSensor(let sensor, _),
-             .stoppingForTimer(let sensor, _),
+        case .stoppingForTimer(let sensor, _),
              .stoppedAtSensor(let sensor):              sensor.block
         case .waiting, .stoppingForResource:            nil
         }
@@ -52,8 +50,6 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
             "Stopping for resource \(trackResource)"
         case .stoppedForResource(let trackResource, let block):
             "Stopped for resource \(trackResource), \(block)"
-        case .stoppingAtSensor(let sensor, let distance):
-            "Stopping at sensor \(sensor), \(distance)"
         case .stoppingForTimer(let sensor, let timer):
             "Stopping for timer \(timer) at \(sensor)"
         case .stoppedAtSensor(let sensor):

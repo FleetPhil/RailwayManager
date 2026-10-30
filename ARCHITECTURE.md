@@ -13,7 +13,7 @@ A Swift 6 command-line controller for a model railway (the "Final26" layout). It
 
 Package: `swift-tools-version 6.1`, Swift language mode 6, platforms macOS 15 / iOS 16 (Linux code paths also exist). Single executable target `RailwayManager`.
 
-Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global `log`), mqtt-nio, CollectionConcurrencyKit (declared but no longer imported). SunCalc is declared but not used.
+Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global `log`), mqtt-nio. SunCalc is declared but not used.
 
 ~7,200 lines (about 5,000 of code, excluding comments and blank lines) across 51 Swift files.
 
@@ -107,7 +107,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Signals: cached `(home, distant)`; recomputed from a `LayoutTrackSnapshot`.
 
 ### Train runtime (`LayoutTrainController`)
-- `TrainRuntimeState`: `idle(Block?)` (the block the train is in, nil if not known), `running(item), waiting, stoppingForResource, stoppedForResource, stoppingAtSensor, stoppingForTimer, stoppedAtSensor`. `lastKnownBlock` gives the train's front block from any state (from the path item or sensor; nil for `waiting`/`stoppingForResource`). Routes set `idle` with the start block (`resetRoute`, the block the train was already in) or the stop sensor's block (`endRoute`); `activateSession` and `stopAllTrains` keep the last known block, so it survives a shutdown, an error or a stop-all reset (when block states are reset to vacant but the train has not moved). MQTT train state shows `Idle (B)`, or `Idle` if the block is not known.
+- `TrainRuntimeState`: `idle(Block?)` (the block the train is in, nil if not known), `running(item), waiting, stoppingForResource, stoppedForResource, stoppingForTimer, stoppedAtSensor`. `lastKnownBlock` gives the train's front block from any state (from the path item or sensor; nil for `waiting`/`stoppingForResource`). Routes set `idle` with the start block (`resetRoute`, the block the train was already in) or the stop sensor's block (`endRoute`); `activateSession` and `stopAllTrains` keep the last known block, so it survives a shutdown, an error or a stop-all reset (when block states are reset to vacant but the train has not moved). MQTT train state shows `Idle (B)`, or `Idle` if the block is not known.
 - DCC sessions: `requestSession` (RLOC) → PLOC arrives as `didGetSession` → `activateSession`; ERR "session in use" → `sessionAllocated` → steal (GLOC). Commands wait up to 5 s for a session, then throw `noDCCSession`.
 - Speeds: `TrainSpeed` `stop/slow/normal/fast/manual` mapped to power per train by `TrainSpeeds` (slow, normal and fast each a power and a speed in cm/s, used for station stop timing; stop is always zero, a manual speed is its own power).
 - Roster: `TrainRoster` (the `Train`s built once from `TrainParams`, looked up with `train(id:)`) is loaded at startup by `TrainRoster.load(path:)` and held by `LayoutManager.trains`. It is read from the JSON file given with `-trains <path>`, otherwise `~/.railwaymanager/trains.json` if it exists, otherwise the built-in `Resources/trains.json`. Each train: `id`, `name`, DCC `address`, `length` (cm), `speeds` (`slow`/`normal`/`fast`, each `{power, speed}`) and optional `startFunctions` (`{function, delay, description?, enabled?}`; a function with `"enabled": false` is kept in the file but not run). The roster is validated on loading (ids and addresses unique, lengths and speeds positive, power 0–100 and not decreasing from slow to fast, delays not negative); a missing, unreadable or invalid file given or found is fatal at startup (`TrainError.trainRosterError`).
@@ -159,7 +159,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 - Path avoidance looks only at the blocks and points on each block route, not the contiguous blocks beyond (which `reservePathItem` checks), and at blocks held by other trains anywhere ahead, so a train standing far ahead can cause a detour; the path is worked out again at every block, so the train returns to the shortest path once it is clear. A waiting train only looks for a new path when the resource it is waiting for is freed, or, when waiting to enter its segment's end block, when one of the blocks the segment can end in is freed (`handleFreedResource`).
 - Speed-change delay should depend on block length.
 - Loops are not reserved as a unit: a second train can take a loop's exit block while the first is in the loop, and neither can then move (section 11, loop reservation step 3).
-- `stoppingAtSensor` and `waiting` train states are never set (RouteOperator no longer handles `stoppingAtSensor`; `TrainRuntimeState` and `SignalTrackState` still do); `didEndTimer`, buttons 1 and 5 unused.
+- The `waiting` train state is never set; `didEndTimer`, buttons 1 and 5 unused.
 - Lights (`Light`, `Block.associatedLights`, `CBUSManager.setLight/setClocks/setLED`) are stubs.
 - All signals in `Final26` have address 0 (not wired yet), and it has no block lengths, so `checkLoopLengths` can't check it.
 

@@ -141,7 +141,7 @@ actor RouteOperator {
         
         // If train state is stopping speed is slow
         switch try await trainController.trainState(train) {
-        case .stoppingForResource, .stoppingAtSensor, .stoppingForTimer:
+        case .stoppingForResource, .stoppingForTimer:
             newSpeed = .slow
         default:
             // If no block exit speed is slow
