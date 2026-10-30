@@ -25,7 +25,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 | `Layout Elements/` | Static topology model: `Layout` base class, `Block`, `Point`, `Signal`, `Sensor`, `BlockDirection` |
 | `Layout Management/Route Management/` | `Route`, `Segment` (+ `WaitTime`), `TrackResource`, `LayoutRoute.swift` (graph building, `Layout.path()`, `layoutIsValid()`) |
 | `Layout Management/Path/` | `Path`, `PathItem` |
-| `Layout Management/Layout State Management/` | `LayoutEvent` + `LayoutEventHub`, `LayoutTrackStateService` (actor – all mutable track state), `LayoutTrackSnapshot` |
+| `Layout Management/Layout State Management/` | `LayoutEvent` + `LayoutEventHub`, `LayoutTrackStateService` (actor – all mutable track state), `BlockRuntimeState` (block and point runtime states, `DirectionLock`), `LayoutTrackSnapshot` |
 | `Layout Management/Signals/` | `SignalTrackState` (per-signal aspect logic), `SignalCoordinator` (whole-layout refresh, distant & diverging aspects) |
 | `Layout Management/Train control/` | `LayoutTrainController` (actor – train state/direction, DCC commands), `DCCSessionStore`, `TrainRuntimeState` |
 | `Train/`, `Params/` | `Train`, `TrainSpeed`, `TrainSensor`; `TrainParams`, `TrainSpeeds`, `TrainSpeedSetting`, `TrainStartFunction`, `TrainRoster` |
