@@ -490,31 +490,8 @@ actor RouteOperator {
         
         // We are stopping in toBlock
         
-        // Identify the sensor that we will be stopping at: when stopping on entry the start sensor (set by the rear);
-        // otherwise if there is a station sensor in the block use that, otherwise use the end sensor
-        let stopAt = currentSegment.stopAt
-        var stopSensor: Sensor {
-            get throws {
-                if stopAt == .entered {
-                    let toDirection = frontItem.toDirection
-                    guard let startSensor = layout.sensorForBlock(frontItem.toBlock, atBlockStart: true, inDirection: toDirection) else {
-                        throw TrainError.applicationError("No start sensor for block \(frontItem.toBlock), \(toDirection)")
-                    }
-                    return startSensor
-                } else if let stationSensor = layout.stationSensorForBlock(frontItem.toBlock) {
-                    return stationSensor
-                } else {
-                    // The train stops at the end of toBlock in the direction it enters it
-                    let toDirection = frontItem.toDirection
-                    guard let endSensor = layout.sensorForBlock(frontItem.toBlock, atBlockStart: false, inDirection: toDirection) else {
-                        throw TrainError.applicationError("No end sensor for block \(frontItem.toBlock), \(toDirection)")
-                    }
-                    return endSensor
-                }
-            }
-        }
-        
-        log.verbose("Train \(train) will stop at \(try! stopSensor) in block \(frontItem.toBlock)")
+        let stopSensor = try self.stopSensor(in: frontItem.toBlock, direction: frontItem.toDirection, stopAt: currentSegment.stopAt)
+        log.verbose("Train \(train) will stop at \(stopSensor) in block \(frontItem.toBlock)")
         
         try await setTrainState(.stoppingForTimer(stopSensor, waitTime))
         try await setTrainSpeed(inBlock: frontItem.toBlock)
@@ -527,6 +504,24 @@ actor RouteOperator {
         // No more processing for now
     }
          
+    // The sensor a train entering the block in the direction stops at: when stopping on entry the start
+    // sensor (set by the rear); otherwise the station sensor if there is one, otherwise the end sensor
+    private func stopSensor(in block: Block, direction: BlockDirection, stopAt: StopPosition) throws -> Sensor {
+        if stopAt == .entered {
+            guard let startSensor = layout.sensorForBlock(block, atBlockStart: true, inDirection: direction) else {
+                throw TrainError.applicationError("No start sensor for block \(block), \(direction)")
+            }
+            return startSensor
+        }
+        if let stationSensor = layout.stationSensorForBlock(block) {
+            return stationSensor
+        }
+        guard let endSensor = layout.sensorForBlock(block, atBlockStart: false, inDirection: direction) else {
+            throw TrainError.applicationError("No end sensor for block \(block), \(direction)")
+        }
+        return endSensor
+    }
+    
     private func processNextFrontPathItem() async throws {
         let isRouteStart = frontItem == nil
         let trainState = try await trainController.trainState(train)
