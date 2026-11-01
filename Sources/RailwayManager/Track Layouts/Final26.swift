@@ -40,9 +40,9 @@ class Final26: Layout, @unchecked Sendable {
             Point(id: 8, address: 62, orientation: .left, defaultPosition: .splitStraight),
             Point(id: 9, address: 55, orientation: .left, reversedConnection: true),
             Point(id: 10, address: 51, orientation: .right, reversedConnection: true),
-            Point(id: 11, address: 54, orientation: .right, reversedConnection: true),
-            Point(id: 12, address: 53, orientation: .right, reversedConnection: true),
-            Point(id: 13, address: 50, orientation: .right),
+            Point(id: 11, address: 54, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
+            Point(id: 12, address: 53, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
+            Point(id: 13, address: 50, orientation: .right, defaultPosition: .splitBranch),
         ]
         
         point(1).setConnection(from: .single, to: .block(block("A")))
@@ -202,7 +202,7 @@ class Final26: Layout, @unchecked Sendable {
             Sensor(id: 28, address: 28, location: .end(block("P"), 10)),
 
         ]
-        initialTrainBlocks = [1: block("A"), 2: block("F")]
+        initialTrainBlocks = [1: block("A"), 2: block("G")]
         
         // Parallel platforms: a train may stop in either
         alternativeEndBlocks = [

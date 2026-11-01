@@ -12,26 +12,19 @@ extension RailwayManager {
     static func routines(for layout: Layout) -> [String: Routine] {
         switch layout {
         case is Final26:
-            guard let route = try? finalRoute(layout: layout) else { return [:] }
-            return ["lm": Routine(name: "lm", routes: [route], repeatCount: 2, interval: 30)]
+            guard let route1 = try? finalRoute1(layout: layout) else { return [:] }
+            guard let route2 = try? finalRoute2(layout: layout) else { return [:] }
+            return [
+                "r1": Routine(name: "r1", routes: [route1], repeatCount: 2, interval: 30),
+                "r2": Routine(name: "r2", routes: [route2], repeatCount: 2, interval: 30),
+            ]
         default:
             return [:]
         }
     }
 
-    // Seconds between the test commands run by -test
-    static let testCommandInterval = 10
-    
-    // Console commands ('sn1', 'ss2', 'st' ...) run in order, testCommandInterval seconds apart, by -test <routine>
-    static func testCommands(for routineName: String) -> [String] {
-        switch routineName {
-        case "lm":  return ["sn19", "sn20", "sn21", "ss24", "ss23", "sn24", "sn21", "sn22", "sn1", "sn2"]
-        default:    return []
-        }
-    }
-    
-    // From A (where train 1 starts) to L forward, halting once wholly in L, then reverse into M
-    private static func finalRoute(layout: Layout) throws -> Route {
+    // From A (where train 1 starts) to L forward, halting once wholly in L, then reverse into M, and back to A
+    private static func finalRoute1(layout: Layout) throws -> Route {
         let segment1 = Segment(toBlock: layout.block("L"), direction: .forward, waitTime: .halt, stopAt: .entered)
         let segment2 = Segment(toBlock: layout.block("M"), direction: .reverse, waitTime: .halt)
         let segment3 = Segment(toBlock: layout.block("A"), direction: .forward, waitTime: .halt)
@@ -41,4 +34,16 @@ extension RailwayManager {
         
         return route1
     }
+
+    // From G (where train 2 starts) to A forward, then back to G
+    private static func finalRoute2(layout: Layout) throws -> Route {
+        let segment1 = Segment(toBlock: layout.block("A"), direction: .forward, waitTime: .none)
+        let segment2 = Segment(toBlock: layout.block("G"), direction: .forward, waitTime: .halt)
+        let route2 = Route(id: 2, segments: [segment1, segment2])
+        
+        log.info("Route is \(route2)")
+        
+        return route2
+    }
+
 }
