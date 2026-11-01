@@ -30,19 +30,19 @@ class Final26: Layout, @unchecked Sendable {
             Block(id: "P"),
         ]
         points = [
-            Point(id: 1, address: 50, orientation: .left, reversedConnection: true),
+            Point(id: 1, address: 61, orientation: .left),
             Point(id: 2, address: 57, orientation: .left, defaultPosition: .splitStraight),
             Point(id: 3, address: 52, orientation: .left, defaultPosition: .splitStraight),
-            Point(id: 4, address: 55, orientation: .right, defaultPosition: .splitStraight, reversedConnection: true),
-            Point(id: 5, address: 51, orientation: .right, defaultPosition: .splitStraight),
+            Point(id: 4, address: 59, orientation: .right, defaultPosition: .splitStraight),
+            Point(id: 5, address: 60, orientation: .right, defaultPosition: .splitStraight),
             Point(id: 6, address: 56, orientation: .right, defaultPosition: .splitStraight),
-            Point(id: 7, address: 58, orientation: .left, defaultPosition: .splitStraight, reversedConnection: true),
-            Point(id: 8, address: 53, orientation: .left, defaultPosition: .splitStraight, reversedConnection: true),
-            Point(id: 9, address: 54, orientation: .left),
-            Point(id: 10, address: 59, orientation: .right),
-            Point(id: 11, address: 60, orientation: .right),
-            Point(id: 12, address: 61, orientation: .right),
-            Point(id: 13, address: 62, orientation: .right),
+            Point(id: 7, address: 58, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 8, address: 62, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 9, address: 55, orientation: .left, reversedConnection: true),
+            Point(id: 10, address: 51, orientation: .right, reversedConnection: true),
+            Point(id: 11, address: 54, orientation: .right, reversedConnection: true),
+            Point(id: 12, address: 53, orientation: .right, reversedConnection: true),
+            Point(id: 13, address: 50, orientation: .right),
         ]
         
         point(1).setConnection(from: .single, to: .block(block("A")))
@@ -108,7 +108,7 @@ class Final26: Layout, @unchecked Sendable {
         block("J").setExit(.forward, .point(PointSetting(point: point(5), direction: .single)))
         block("K").setExit(.forward, .point(PointSetting(point: point(13), direction: .splitBranch)))
         block("L").setExit(.forward, .point(PointSetting(point: point(12), direction: .splitStraight)))
-        block("M").setExit(.forward, .noExit)
+        block("M").setExit(.forward, .point(PointSetting(point: point(13), direction: .splitStraight)))
         block("N").setExit(.forward, .point(PointSetting(point: point(9), direction: .splitBranch)))
         block("P").setExit(.forward, .point(PointSetting(point: point(11), direction: .single)))
 
@@ -123,7 +123,7 @@ class Final26: Layout, @unchecked Sendable {
         block("J").setExit(.reverse, .point(PointSetting(point: point(2), direction: .single)))
         block("K").setExit(.reverse, .point(PointSetting(point: point(1), direction: .splitStraight)))
         block("L").setExit(.reverse, .point(PointSetting(point: point(13), direction: .single)))
-        block("M").setExit(.reverse, .point(PointSetting(point: point(13), direction: .splitStraight)))
+        block("M").setExit(.reverse, .noExit)
         block("N").setExit(.reverse, .point(PointSetting(point: point(5), direction: .splitBranch)))
         block("P").setExit(.reverse, .point(PointSetting(point: point(9), direction: .single)))
 
@@ -150,7 +150,7 @@ class Final26: Layout, @unchecked Sendable {
             Signal(id: 20, address: 0, location: block("K"), indication: .point(point(13), .splitBranch), direction: .forward),
             Signal(id: 21, address: 0, location: block("L"), indication: .point(point(13), .single), direction: .reverse),
             Signal(id: 22, address: 0, location: block("L"), indication: .point(point(12), .splitStraight), direction: .forward),
-            Signal(id: 24, address: 0, location: block("M"), indication: .point(point(13), .splitStraight), direction: .reverse),
+            Signal(id: 24, address: 0, location: block("M"), indication: .point(point(13), .splitStraight), direction: .forward),
             Signal(id: 25, address: 0, location: block("N"), indication: .point(point(5), .splitBranch), direction: .reverse),
             Signal(id: 26, address: 0, location: block("N"), indication: .point(point(9), .splitBranch), direction: .forward),
             Signal(id: 27, address: 0, location: block("P"), indication: .point(point(9), .single), direction: .reverse),
@@ -192,8 +192,8 @@ class Final26: Layout, @unchecked Sendable {
             Sensor(id: 21, address: 21, location: .start(block("L"), 10)),
             Sensor(id: 22, address: 22, location: .end(block("L"), 10)),
 
-            Sensor(id: 23, address: 23, location: .end(block("M"), 10)),
-            Sensor(id: 24, address: 24, location: .start(block("M"), 10)),
+            Sensor(id: 23, address: 23, location: .start(block("M"), 10)),
+            Sensor(id: 24, address: 24, location: .end(block("M"), 10)),
             
             Sensor(id: 25, address: 25, location: .start(block("N"), 10)),
             Sensor(id: 26, address: 26, location: .end(block("N"), 10)),
