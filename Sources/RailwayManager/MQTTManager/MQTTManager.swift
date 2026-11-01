@@ -31,6 +31,7 @@ actor MQTTManager: Sendable {
         var itemID: String
         var itemState: String
         var additionalInformation: String?
+        var currentBlock: String?       // Trains only: the block the train was last known to be in
     }
     
     // Payload for the result topic: the outcome of a route request, the route and train it concerns
@@ -233,7 +234,8 @@ actor MQTTManager: Sendable {
         do {
             let state = LayoutItemState(itemType: .train,
                                         itemID: "\(train.id)",
-                                        itemState: state.description)
+                                        itemState: state.description,
+                                        currentBlock: state.lastKnownBlock?.id)
             let payload = try String(decoding: JSONEncoder().encode(state), as: UTF8.self)
             
             if GlobalOptions.noMQTT {
