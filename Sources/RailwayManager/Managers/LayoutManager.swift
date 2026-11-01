@@ -465,6 +465,18 @@ actor LayoutManager {
         }
     }
     
+    // Read-only view of the track and train states (for the test simulator)
+    func trackSnapshot() async -> LayoutTrackSnapshot {
+        await trackStateService.snapshot()
+    }
+
+    // The orientation of the sensor event set by the front or rear of the train, given its DCC direction
+    // (the inverse of LayoutTrainController.trainSensorLocationForOrientation)
+    func sensorOrientation(of end: TrainSensor, for train: Train) async throws -> SensorEventOrientation {
+        let isFrontMagnet = try await trainController.dccDirection(train) == .forward ? end == .front : end == .rear
+        return isFrontMagnet ? train.trainFrontSensorOrientation : train.trainRearSensorOrientation
+    }
+
     func printStatus() async {
         await trackStateService.printStatus()
     }

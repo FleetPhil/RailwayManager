@@ -192,7 +192,7 @@ struct RailwayManager: ParsableCommand {
                 }
             }
 
-            // Run the routine's predefined console commands at fixed intervals
+            // Simulate the sensor events of the train running each -test routine
             for (index, testRoutine) in testRoutines.enumerated() {
                 guard routines.contains(where: { $0.0.name == testRoutine }) else {
                     throw TrainError.applicationError("-test \(testRoutine): routine is not started with -routine")
@@ -202,20 +202,9 @@ struct RailwayManager: ParsableCommand {
                 }
             }
             for testRoutine in testRoutines {
-                let commands = testCommands(for: testRoutine)
-                log.info("Test for routine \(testRoutine): \(commands.count) commands every \(testCommandInterval)s")
-                Task {
-                    for command in commands {
-                        do {
-                            try await Task.sleep(for: .seconds(testCommandInterval))
-                            log.info("Test \(testRoutine) command: \(command)")
-                            try await processConsoleCommand(command, layoutManager)
-                        } catch {
-                            log.error("Test \(testRoutine) command '\(command)' failed: \(error)")
-                        }
-                    }
-                    log.info("Test for routine \(testRoutine) complete")
-                }
+                guard let train = routines.first(where: { $0.0.name == testRoutine })?.1 else { continue }
+                let simulator = TrainSimulator(train: train, layoutManager: layoutManager)
+                Task { await simulator.run() }
             }
 
             // Run routes as they are requested over MQTT (a no-op with -noMQTT)
