@@ -8,15 +8,17 @@
 import Foundation
 
 extension RailwayManager {
-    // The hard-coded route run with -noMQTT, or nil if the layout has none
-    static func setupRoutes(layoutManager: LayoutManager) async throws -> Route?  {
-        let layout = layoutManager.layout
+    // The named routines available on the layout, started with -routine <name>:<trainID>
+    static func routines(for layout: Layout) -> [String: Routine] {
         switch layout {
-        case is Final26:     return try finalRoute(layout: layout)
-        default:            return nil
+        case is Final26:
+            guard let route = try? finalRoute(layout: layout) else { return [:] }
+            return ["lm": Routine(name: "lm", routes: [route], repeatCount: 2, interval: 30)]
+        default:
+            return [:]
         }
     }
-    
+
     // From A (where train 1 starts) to L forward, halting once wholly in L, then reverse into M
     private static func finalRoute(layout: Layout) throws -> Route {
         let segment1 = Segment(toBlock: layout.block("L"), direction: .forward, waitTime: .halt, stopAt: .entered)

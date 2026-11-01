@@ -51,7 +51,7 @@ struct RailwayManager: ParsableCommand {
         abstract: "Model railway layout controller")
     
     @Flag(name: .customLong("noMQTT", withSingleDash: true),
-          help: "Run without publishing state to the MQTT broker")
+          help: "Run without connecting to the MQTT broker")
     var noMQTT = false
     
     @Flag(name: .customLong("noCBUS", withSingleDash: true),
@@ -79,6 +79,10 @@ struct RailwayManager: ParsableCommand {
             help: "Trains JSON file (default \(TrainRoster.defaultFileURL.path) if it exists, otherwise the built-in trains)")
     var trainsPath: String?
     
+    @Option(name: .customLong("routine", withSingleDash: true),
+            help: "Routine to run at startup as <name>:<trainID>; repeatable, one routine per train")
+    var routineArgs: [String] = []
+
     func run() throws {
         // Apply the options before anything reads them
         GlobalOptions.noMQTT = noMQTT
@@ -126,7 +130,31 @@ struct RailwayManager: ParsableCommand {
         }
         
         // Create and run the manager
-        await Self.runManager(layoutManager: layoutManager)
+        await Self.runManager(layoutManager: layoutManager, routineArgs: routineArgs)
+    }
+
+    // Parse -routine <name>:<trainID> arguments; each train may have only one routine
+    static func parseRoutines(_ args: [String], layoutManager: LayoutManager) throws -> [(Routine, Train)] {
+        let available = routines(for: layoutManager.layout)
+        var result: [(Routine, Train)] = []
+        var usedTrains = Set<Int>()
+        for arg in args {
+            let parts = arg.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count == 2, let trainID = Int(parts[1]) else {
+                throw TrainError.applicationError("Bad -routine '\(arg)': expected <name>:<trainID>")
+            }
+            guard let routine = available[parts[0]] else {
+                throw TrainError.applicationError("Unknown routine '\(parts[0])'; available: \(available.keys.sorted().joined(separator: ", "))")
+            }
+            guard let train = layoutManager.trains.train(id: trainID) else {
+                throw TrainError.applicationError("Bad -routine '\(arg)': no train \(trainID)")
+            }
+            guard usedTrains.insert(trainID).inserted else {
+                throw TrainError.applicationError("Train \(trainID) is given more than one -routine")
+            }
+            result.append((routine, train))
+        }
+        return result
     }
     
     static func setupLog(minLevel: SwiftyBeaver.Level) {
@@ -138,7 +166,7 @@ struct RailwayManager: ParsableCommand {
     }
     
     // Main run function
-    static func runManager(layoutManager: LayoutManager) async {
+    static func runManager(layoutManager: LayoutManager, routineArgs: [String] = []) async {
         log.info("Starting manager...")
         
 #if os(OSX)
@@ -148,17 +176,20 @@ struct RailwayManager: ParsableCommand {
 #endif
         
         do {
-            if GlobalOptions.noMQTT {
-                // No route source without MQTT: run the hardcoded test route for the layout, if any
-                if let route = try await setupRoutes(layoutManager: layoutManager) {
-                    try await layoutManager.runRoute(route: route, train: layoutManager.trains.trains[0])
-                } else {
-                    log.info("No built-in route for layout \(type(of: layoutManager.layout))")
+            // Start the routines given on the command line
+            let routines = try parseRoutines(routineArgs, layoutManager: layoutManager)
+            for (routine, train) in routines {
+                Task {
+                    do {
+                        try await routine.run(train: train, layoutManager: layoutManager)
+                    } catch {
+                        log.error("Routine \(routine.name) for train \(train.id) aborted: \(error)")
+                    }
                 }
-            } else {
-                // Run routes as they are requested over MQTT
-                monitorRouteRequests(layoutManager: layoutManager)
             }
+
+            // Run routes as they are requested over MQTT (a no-op with -noMQTT)
+            monitorRouteRequests(layoutManager: layoutManager)
             
             // Start task to process test commands if on macOS
             while GlobalOptions.consoleTestCommands {

@@ -23,13 +23,13 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 |---|---|
 | `Managers/` | `RailwayManager` (@main, CLI, startup, MQTT route intake, console commands), `LayoutManager` (actor – central event loop, layout lifecycle), `RouteOperator` (actor – one per train, executes a route) |
 | `Layout Elements/` | Static topology model: `Layout` base class, `Block`, `Point`, `Signal`, `Sensor`, `BlockDirection` |
-| `Layout Management/Route Management/` | `Route`, `Segment` (+ `WaitTime`), `TrackResource`, `LayoutRoute.swift` (graph building, `Layout.path()`, `layoutIsValid()`) |
+| `Layout Management/Route Management/` | `Route`, `Segment` (+ `WaitTime`), `Routine` (named sequence of routes, `repeatCount` (0 = until shutdown), `interval` seconds between runs), `TrackResource`, `LayoutRoute.swift` (graph building, `Layout.path()`, `layoutIsValid()`) |
 | `Layout Management/Path/` | `Path`, `PathItem` |
 | `Layout Management/Layout State Management/` | `LayoutEvent` + `LayoutEventHub`, `LayoutTrackStateService` (actor – all mutable track state), `BlockRuntimeState` (block and point runtime states, `DirectionLock`), `LayoutTrackSnapshot` |
 | `Layout Management/Signals/` | `SignalTrackState` (per-signal aspect logic), `SignalCoordinator` (whole-layout refresh, distant & diverging aspects) |
 | `Layout Management/Train control/` | `LayoutTrainController` (actor – train state/direction, DCC commands), `DCCSessionStore`, `TrainRuntimeState` |
 | `Train/`, `Params/` | `Train`, `TrainSpeed`, `TrainSensor`; `TrainParams`, `TrainSpeeds`, `TrainSpeedSetting`, `TrainStartFunction`, `TrainRoster` |
-| `Track Layouts/` | Concrete layouts: `Final26` (`-layout Final`, the default and the layout being built: 14 blocks A–P, 13 points, 28 sensors; signal addresses are placeholders (0), no block lengths), `TestLoop2` (reversing-loop test layout with stubs S1/S2, dummy addresses, block lengths, no built-in route); `Final Routes` (`setupRoutes`: hard-coded test route per layout) |
+| `Track Layouts/` | Concrete layouts: `Final26` (`-layout Final`, the default and the layout being built: 14 blocks A–P, 13 points, 28 sensors; signal addresses are placeholders (0), no block lengths), `TestLoop2` (reversing-loop test layout with stubs S1/S2, dummy addresses, block lengths, no built-in route); `Final Routes` (`routines(for:)`: named routines per layout) |
 | `MQTTManager/` | `MQTTManager` actor – telemetry publish, topology, route-request subscription, `RouteParams` |
 | `ModelRailwayHardware/` | Hardware abstraction: `HardwarePoint`/`DCCHardwarePoint`/`CBUSHardwarePoint`, `HardwareSignal`/`CBUSHardwareSignal`, `HardwareTrain`/`CBUSHardwareTrain`, `DCCDirection`, `Led`, `Light`, `EventBus<T>`, `CBUSManager` (+ serial discovery, message encode/decode, op codes) |
 | `Diagnostics/` | `printStatus()` dump of a snapshot |
@@ -40,7 +40,7 @@ Dependencies: SwiftSerial, swift-argument-parser, SwiftyBeaver (logging, global 
 ## 3. Runtime architecture
 
 ```
-            CLI flags (-noMQTT -noCBUS -noDCC -layout -trains --mqtt-host --mqtt-port --log-level)
+            CLI flags (-noMQTT -noCBUS -noDCC -layout -trains -routine --mqtt-host --mqtt-port --log-level)
                                    │
                           RailwayManager.run()
                                    │  builds the -layout layout (default Final),  validates, connects MQTT, opens CBUS
@@ -96,7 +96,8 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 
 ### Routes
 - `Route` = id + `[Segment]` (+ optional `initialDCCDirection`); `Segment` = `toBlock`, `direction` (travel direction in the block the segment starts from) + optional `WaitTime` (`fixed(s)`, `halt` 5 s, `station` 10 s, `terminus` 20 s) + `stopAt` (`StopPosition`: `end`, the default, stops when the front reaches the stop sensor; `entered` stops as soon as the train is wholly in `toBlock`, when the rear passes its start sensor). A route has no start block: it starts from the block the train is in (its `lastKnownBlock`), and each later segment starts where the previous one ended (`Route.segmentStartBlocks(from:)`). A direction change happens between segments. Segments hold no path: `RouteOperator` works out each path item as the train runs (section 5). `Route.validate(from:in:)` rejects a route with no segments or a segment with no path from where it starts (`Segment.nominalPath(from:in:)`, the shortest path ignoring other trains).
-- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, optional `initialDCCDirection` (`"forward"`/`"reverse"`; omitted keeps the train's current facing), segments `{toBlock,direction,waitTime,stopAt}` (`stopAt` optional, `"end"` or `"entered"`, default end); a `fromBlock` key from an older sender is ignored), each `toBlock` checked to be a layout block, or, with `-noMQTT`, the layout's hard-coded route from `setupRoutes` (`Final Routes.swift`; Final26: from A to L forward, halting once wholly in L (`stopAt` entered), then reverse into M; none for other layouts) with the first train. `LayoutManager.runRoute` takes the start block from the train's `lastKnownBlock`, rejecting the route (`invalidRoute`, "place it with tb") if it is not known, then calls `Route.validate(from:in:)` and `Route.checkLoopLengths(for:from:in:)` (see section 11, loop reservation).
+- Routes arrive via MQTT (`RouteParams`: command, routeID, trainID, optional `initialDCCDirection` (`"forward"`/`"reverse"`; omitted keeps the train's current facing), segments `{toBlock,direction,waitTime,stopAt}` (`stopAt` optional, `"end"` or `"entered"`, default end); a `fromBlock` key from an older sender is ignored), each `toBlock` checked to be a layout block or, for test runs, the `rr` console command or a routine (`-noMQTT` only means MQTT is not connected; it starts nothing). `LayoutManager.runRoute` takes the start block from the train's `lastKnownBlock`, rejecting the route (`invalidRoute`, "place it with tb") if it is not known, then calls `Route.validate(from:in:)` and `Route.checkLoopLengths(for:from:in:)` (see section 11, loop reservation).
+- Routines: `-routine <name>:<trainID>` (repeatable; names come from `routines(for:)` in `Final Routes.swift`; one routine per train, duplicates rejected at startup) run concurrently, each in its own Task. `Routine.run` calls `LayoutManager.runRouteAndWait` per route (waits for `.didEndRoute`, throws if the route operator enters `.error`); a failure aborts that routine only. The interval is the gap after a run ends. To add a routine, add it to `routines(for:)`.
 - MQTT commands: `1` runRoute, `2` stopAllTrains (reset track), `3` endManager.
 
 ### Runtime state (`LayoutTrackStateService`)
@@ -213,7 +214,7 @@ The steps below are a record. The `Cellar`, `TestLoop` and `Xmas26` layouts they
 7a. `RouteOperator.handleSensorSet` works out start/end of block from the travel direction in the sensor's block (its block state) instead of the train's direction.
 7b. `RouteOperator.travelDirection(in:)` (block state direction, falling back to the train's direction) is used by `handleSensorSet` and by `setTrainSpeed` for the block-exit check and end-signal lookup; the stop sensor (end sensor when there is no station sensor) is chosen with the path item's `toDirection`.
 7c. Facing: `LayoutTrainController.crossOrientationChange` flips the train's direction and facing together when the front enters a block across a loop closure. `processNextFrontPathItem` detects a reversal by comparing the next path item's `fromDirection` with the train's direction (rather than the segment's starting direction), so a loop closure part-way through a segment is not mistaken for a reversal. No effect on Cellar (no loop closures).
-8a. `TestLoop` layout (S stub, A approach, point 1, loop B→C returning via the branch into A) and the `-layout` option (`LayoutName`, default Cellar). `setupRoutes` returns nil for layouts without a built-in route.
+8a. `TestLoop` layout (S stub, A approach, point 1, loop B→C returning via the branch into A) and the `-layout` option (`LayoutName`, default Cellar).
 8b. Built-in `TestLoop` route (`TestLoop Routes.swift`): S→C forward (through the branch, so the train crosses the loop closure and enters C travelling reverse), halt, then C→S reverse via B and A. DCC stays forward throughout; the train ends in S facing the other way. Console sequence with a short train (front = `sn`, rear = `ss` while DCC forward): `sn2 sn3 ss3 sn4 sn8 ss8 sn7`, wait for the halt, then `sn6 ss6 sn5 sn4 ss4 sn3 sn2 ss2 sn1`.
 
 The Cellar topology dump was identical to the baseline after 4b and 4c (it does not cover `contiguousBlocks()`).

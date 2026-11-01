@@ -218,8 +218,33 @@ actor LayoutManager {
         await LayoutEventHub.shared.publish(.didStartRoute(train))
     }
     
+    // Run a route and return when the train has finished it; throws if it fails to start or ends in error
+    func runRouteAndWait(route: Route, train: Train) async throws {
+        // Subscribe before starting so the end event cannot be missed
+        let events = await LayoutEventHub.shared.subscribe()
+        try await runRoute(route: route, train: train)
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                for await event in events where event == .didEndRoute(train) { return }
+            }
+            // A failed route publishes no event, so watch for the error state
+            group.addTask { [self] in
+                while true {
+                    if let routeOperator = await routeOperators[train],
+                       case .error(let error) = await routeOperator.routeState {
+                        throw error
+                    }
+                    try await Task.sleep(for: .milliseconds(500))
+                }
+            }
+            try await group.next()
+            group.cancelAll()
+        }
+    }
+
     // MARK: Route operators
-    
+
     // The train's route operator: one is created when the train first runs a route
     private func routeOperator(for train: Train) throws -> RouteOperator {
         guard let routeOperator = routeOperators[train] else {
