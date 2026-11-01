@@ -82,6 +82,10 @@ struct RailwayManager: ParsableCommand {
     @Option(name: .customLong("routine", withSingleDash: true),
             help: "Routine to run at startup as <name>:<trainID>; repeatable, one routine per train")
     var routineArgs: [String] = []
+    
+    @Option(name: .customLong("test", withSingleDash: true),
+            help: "Once this routine (which must also be given with -routine) has started, run its predefined console test commands at 5 second intervals; repeatable")
+    var testRoutines: [String] = []
 
     func run() throws {
         // Apply the options before anything reads them
@@ -130,7 +134,7 @@ struct RailwayManager: ParsableCommand {
         }
         
         // Create and run the manager
-        await Self.runManager(layoutManager: layoutManager, routineArgs: routineArgs)
+        await Self.runManager(layoutManager: layoutManager, routineArgs: routineArgs, testRoutines: testRoutines)
     }
 
     // Parse -routine <name>:<trainID> arguments; each train may have only one routine
@@ -166,7 +170,7 @@ struct RailwayManager: ParsableCommand {
     }
     
     // Main run function
-    static func runManager(layoutManager: LayoutManager, routineArgs: [String] = []) async {
+    static func runManager(layoutManager: LayoutManager, routineArgs: [String] = [], testRoutines: [String] = []) async {
         log.info("Starting manager...")
         
 #if os(OSX)
@@ -185,6 +189,32 @@ struct RailwayManager: ParsableCommand {
                     } catch {
                         log.error("Routine \(routine.name) for train \(train.id) aborted: \(error)")
                     }
+                }
+            }
+
+            // Run the routine's predefined console commands at fixed intervals
+            for (index, testRoutine) in testRoutines.enumerated() {
+                guard routines.contains(where: { $0.0.name == testRoutine }) else {
+                    throw TrainError.applicationError("-test \(testRoutine): routine is not started with -routine")
+                }
+                guard !testRoutines[..<index].contains(testRoutine) else {
+                    throw TrainError.applicationError("-test \(testRoutine) is given more than once")
+                }
+            }
+            for testRoutine in testRoutines {
+                let commands = testCommands(for: testRoutine)
+                log.info("Test for routine \(testRoutine): \(commands.count) commands every \(testCommandInterval)s")
+                Task {
+                    for command in commands {
+                        do {
+                            try await Task.sleep(for: .seconds(testCommandInterval))
+                            log.info("Test \(testRoutine) command: \(command)")
+                            try await processConsoleCommand(command, layoutManager)
+                        } catch {
+                            log.error("Test \(testRoutine) command '\(command)' failed: \(error)")
+                        }
+                    }
+                    log.info("Test for routine \(testRoutine) complete")
                 }
             }
 
