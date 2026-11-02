@@ -46,7 +46,7 @@ public enum PointDirection: String, Hashable, CustomStringConvertible, Codable, 
     }
 }
 
-enum BranchOrientation {
+enum BranchOrientation: String, Codable {
     case right
     case left
     

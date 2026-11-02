@@ -403,15 +403,58 @@ extension MQTTManager {
         var segments: [SegmentParams]
     }
     
+    // What a block end or a point leg joins: a block, or a leg of a point
+    struct ConnectionTopology: Codable {
+        var block: String?              // The block, if joined to a block
+        var point: Int?                 // The point, if joined to a point
+        var leg: PointDirection?        // The leg of that point
+
+        init?(exit: BlockExit?) {
+            switch exit {
+            case .block(let block):
+                self.block = block.id
+            case .point(let setting):
+                point = setting.point.id
+                leg = setting.direction
+            case .noExit, .unknown, nil:
+                return nil
+            }
+        }
+
+        init?(connection: PointConnection?) {
+            switch connection {
+            case .block(let block):
+                self.block = block.id
+            case .point(let point, let leg):
+                self.point = point.id
+                self.leg = leg
+            case nil:
+                return nil
+            }
+        }
+    }
+
     struct BlockTopology: Codable {
         var forwardEndSignal: Int?   // Signal at block end in the forward direction
         var reverseEndSignal: Int?   // Signal at block end in the reverse direction
+        var length: Int?             // cm, omitted if not known
+        var forwardExit: ConnectionTopology?    // Omitted if the track ends here
+        var reverseExit: ConnectionTopology?    // Omitted if the track ends here
     }
-    
+
+    struct PointTopology: Codable {
+        var branchOrientation: BranchOrientation
+        var defaultPosition: PointDirection?
+        var single: ConnectionTopology?
+        var straight: ConnectionTopology?
+        var branch: ConnectionTopology?
+    }
+
     struct StateTopology: Codable {
         var blockTopologies: [String : BlockTopology]
         var signalLocations: [ Int : String ]
         var points: [ Int ]
+        var pointTopologies: [ Int : PointTopology ]
     }
 
     func stateTopology(_ from: Layout) -> StateTopology {
@@ -419,16 +462,29 @@ extension MQTTManager {
             let fs = from.signals.first(where: { $0.location == next && $0.direction == .forward })
             let rs = from.signals.first(where: { $0.location == next && $0.direction == .reverse })
 
-            result[next.id] = BlockTopology(forwardEndSignal: fs?.id, reverseEndSignal: rs?.id)
+            result[next.id] = BlockTopology(forwardEndSignal: fs?.id,
+                                            reverseEndSignal: rs?.id,
+                                            length: next.length,
+                                            forwardExit: ConnectionTopology(exit: next.blockExit[.forward]),
+                                            reverseExit: ConnectionTopology(exit: next.blockExit[.reverse]))
         })
         
         let signalLocations: [ Int :  String ] = from.signals.reduce(into: [:], { result, next in
             result[next.id] = next.location.id
         })
 
+        let pointTopologies: [ Int : PointTopology ] = from.points.reduce(into: [:], { result, next in
+            result[next.id] = PointTopology(branchOrientation: next.branchOrientation,
+                                            defaultPosition: next.defaultPosition,
+                                            single: ConnectionTopology(connection: next.connections[.single]),
+                                            straight: ConnectionTopology(connection: next.connections[.splitStraight]),
+                                            branch: ConnectionTopology(connection: next.connections[.splitBranch]))
+        })
+
         return StateTopology(blockTopologies: blockTopologies,
                              signalLocations: signalLocations,
-                             points: from.points.map(\.id)
+                             points: from.points.map(\.id),
+                             pointTopologies: pointTopologies
         )
     }
 }
