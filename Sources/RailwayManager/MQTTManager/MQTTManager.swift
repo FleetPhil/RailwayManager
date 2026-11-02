@@ -451,6 +451,7 @@ extension MQTTManager {
     }
 
     struct StateTopology: Codable {
+        var layoutName: String
         var blockTopologies: [String : BlockTopology]
         var signalLocations: [ Int : String ]
         var points: [ Int ]
@@ -481,7 +482,8 @@ extension MQTTManager {
                                             branch: ConnectionTopology(connection: next.connections[.splitBranch]))
         })
 
-        return StateTopology(blockTopologies: blockTopologies,
+        return StateTopology(layoutName: from.name,
+                             blockTopologies: blockTopologies,
                              signalLocations: signalLocations,
                              points: from.points.map(\.id),
                              pointTopologies: pointTopologies

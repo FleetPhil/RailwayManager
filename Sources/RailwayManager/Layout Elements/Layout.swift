@@ -11,7 +11,7 @@ import Foundation
 class Layout: @unchecked Sendable  {
     // All layout values are set at init and never changed
     // Can't be defined as immutable due to cross-dependencies
-    let name: String = "Layout"
+    var name: String { String(describing: type(of: self)) }     // The subclass name, e.g. Final26
     nonisolated(unsafe) var blocks: [Block] = []
     nonisolated(unsafe) var points: [Point] = []
     nonisolated(unsafe) var sensors: [Sensor] = []
