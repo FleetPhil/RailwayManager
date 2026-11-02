@@ -39,6 +39,14 @@ struct LayoutTrackSnapshot: Sendable {
         blockState(block)?.direction
     }
 
+    // True if a train in the block, travelling in the direction, is stopping or stopped to wait for a resource
+    func isTrainWaitingForResource(in block: Block, direction: BlockDirection) -> Bool {
+        trainStates.values.contains(where: { state in
+            guard let item = state.itemWaitingForResource else { return false }
+            return item.fromBlock == block && item.fromDirection == direction
+        })
+    }
+
     // True if another train is in the way of the block route: its toBlock is reserved, occupied or vacating
     // by another train or locked by one for the opposite direction, or one of its points is reserved by
     // another train. The train's own blocks and points don't count. Used to find a path round other trains;

@@ -47,6 +47,10 @@ actor SignalCoordinator {
              result[key] = (homeState[key]!, distantState[key]!)
         }
         
+        for signalState in result {
+            log.verbose("Signal \(signalState.key) change from \(snapshot.signalState(signalState.key)!) to \(signalState.value)")
+        }
+        
         return result
     }
     
@@ -115,6 +119,7 @@ actor SignalCoordinator {
                 .indicatedBlockOccupiedSameDirection,
                 .indicatedBlockOccupiedOppositeDirection,
                 .nextBlockUnavailable,
+                .trainWaitingForResource,
                 .unexpectedState:
                 return .stop
         case    .signalBlockOccupiedIndicatedBlockVacant,

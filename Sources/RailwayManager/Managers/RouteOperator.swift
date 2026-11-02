@@ -411,7 +411,7 @@ actor RouteOperator {
         // The front of the train is at the end of the from block
         // Check if we should stop
         switch try await trainController.trainState(train) {
-        case .stoppingForResource(let trackResource):
+        case .stoppingForResource(let trackResource, _):
             // Stop and wait as this is the end of a block
             try await stopForResource(trackResource, item: pathItem)
             
@@ -426,7 +426,7 @@ actor RouteOperator {
     // enter the segment's end block and the freed block is one the segment can end in
     func handleFreedResource(_ trackResource: TrackResource) async throws {
         switch try await trainController.trainState(train) {
-        case .stoppingForResource(let awaitedResource), .stoppedForResource(let awaitedResource, _):
+        case .stoppingForResource(let awaitedResource, _), .stoppedForResource(let awaitedResource, _):
             guard let waitingItem = frontItem else { break }
             let isAwaited = awaitedResource == trackResource
             var isFreedEndBlock: Bool {
@@ -556,7 +556,7 @@ actor RouteOperator {
                 try await stopForResource(blockingResource, item: nextItem)
                 return
             }
-            try await setTrainState(.stoppingForResource(blockingResource))
+            try await setTrainState(.stoppingForResource(blockingResource, nextItem))
         } else {
             // Set the points on this path without default values
             for setting in nextItem.pointSettings where setting.point.defaultPosition == nil {
@@ -663,9 +663,9 @@ actor RouteOperator {
         }
         
         // No blocking resource - just carry on
-        // Power the route
-        try await setTrainSpeed(inBlock: item.fromBlock)
+        // Power the route. The train state comes first: while it is waiting for a resource its end signal is at stop
         try await setTrainState(.running(item))
+        try await setTrainSpeed(inBlock: item.fromBlock)
         return nil
     }
     

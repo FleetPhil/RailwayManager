@@ -17,12 +17,18 @@ enum SignalTrackState {
     case signalBlockOccupiedIndicatedBlockVacant
     case signalBlockVacantIndicatedBlockVacant
     case nextBlockUnavailable
+    case trainWaitingForResource
     case unexpectedState
 }
 
 // Return the basic signal state according to the current track conditions
 extension Signal {
     func signalIndication(snapshot: LayoutTrackSnapshot) -> SignalTrackState {
+        // The way ahead may look clear, but a train stopping here for a resource can't take it
+        if snapshot.isTrainWaitingForResource(in: location, direction: direction) {
+            return .trainWaitingForResource
+        }
+        
         guard case let (nextBlock, nextBlockSignalDirection)? = self.nextBlock(snapshot: snapshot) else {
             // Next block is unavailable (assume end of line or points against)
             return .nextBlockUnavailable

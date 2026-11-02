@@ -12,7 +12,7 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
     case running(PathItem)                  // Normal - executing path item
     case waiting                            // Stop commanded in transition or waiting before move
     // Stopping at sensor waiting for block or for other transition item before moving to Block
-    case stoppingForResource(TrackResource)         // Blocking Resource
+    case stoppingForResource(TrackResource, PathItem)             // Blocking Resource, PathItem
     case stoppedForResource(TrackResource, PathItem)              // Waiting for track resource, PathItem
     case stoppingForTimer(Sensor, WaitTime)
     case stoppedAtSensor(Sensor)
@@ -31,10 +31,21 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
         switch self {
         case .idle(let block):                          block
         case .running(let item):                        item.fromBlock
-        case .stoppedForResource(_, let item):          item.fromBlock
+        case .stoppingForResource(_, let item),
+             .stoppedForResource(_, let item):          item.fromBlock
         case .stoppingForTimer(let sensor, _),
              .stoppedAtSensor(let sensor):              sensor.block
-        case .waiting, .stoppingForResource:            nil
+        case .waiting:                                  nil
+        }
+    }
+    
+    // The path item the train can't start until a resource is free, while it is stopping or stopped for it.
+    // The train is in the item's from block, heading for the end of it
+    var itemWaitingForResource: PathItem? {
+        switch self {
+        case .stoppingForResource(_, let item),
+             .stoppedForResource(_, let item):          item
+        default:                                        nil
         }
     }
     
@@ -46,7 +57,7 @@ enum TrainRuntimeState: Equatable, CustomStringConvertible {
             "Running (\(item))"
         case .waiting:
             "Waiting"
-        case .stoppingForResource(let trackResource):
+        case .stoppingForResource(let trackResource, _):
             "Stopping for resource \(trackResource)"
         case .stoppedForResource(let trackResource, let block):
             "Stopped for resource \(trackResource), \(block)"
