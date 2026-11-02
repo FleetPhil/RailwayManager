@@ -74,7 +74,7 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "--log-level info"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-layout TestLoop"
