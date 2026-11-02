@@ -35,7 +35,7 @@ extension RailwayManager {
         return route1
     }
 
-    // From G (where train 2 starts) to A forward, then on to G
+    // From G (where train 2 starts) to A reverse, then on to G
     private static func finalRoute2(layout: Layout) throws -> Route {
         let segment1 = Segment(toBlock: layout.block("A"), direction: .reverse, waitTime: .none)
         let segment2 = Segment(toBlock: layout.block("G"), direction: .reverse, waitTime: .halt)
