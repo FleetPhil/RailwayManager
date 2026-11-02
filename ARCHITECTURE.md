@@ -147,6 +147,7 @@ CBUS serial ─► CBUSManager.CBUSEvents ─┘   └─► LayoutManager.proce
 ## 8. Error handling
 - `TrainError` cases each flagged `isFatal`, with a readable `description` used in logs and error messages. In `runManager` a fatal error sets layout `.error` and `fatalError`s; route requests from MQTT that fail are logged and skipped. Every route request (run route, stop all trains, end manager) gets one reply on `railway/result`: success with an empty message, or failure with the error text, plus the route and train IDs (a publish failure is only logged).
 - A sensor set in a block with no train, while the layout is not `.dormant` or `.error`, puts the layout into `.error` (red LED) and stops all trains (`LayoutManager.sensorSet`). In `.dormant`/`.error` it is only logged as a failed event.
+- A `TrainError.applicationError` inside `processEvent` also puts the layout into `.error` (stopping all trains); other errors only trigger the emergency stop below.
 - Any error inside `processEvent` triggers a CBUS emergency stop. If that fails (CBUS unreachable) the error is logged and the layout enters `.error` (red LED, individual stops attempted) instead of crashing.
 - Delayed speed commands are held per DCC session in `CBUSManager.pendingSpeedCommands`. Any newer speed/stop for the session, a session release, or an emergency stop cancels the pending one, so a delayed speed can never override a later stop.
 - Telemetry failures are swallowed (`try?`) so they never fail a state change.

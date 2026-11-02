@@ -73,6 +73,13 @@ actor LayoutManager {
                         try await self.processEvent(event)
                     } catch {
                         log.warning("Failed to process event \(event): \(error)")
+
+                        // An application error means the layout state can't be trusted:
+                        // go to the error state, which stops all trains
+                        if case TrainError.applicationError = error, await self.layoutState != .error {
+                            log.error("Application error processing \(event): layout error")
+                            try? await self.setState(.error)
+                        }
                         do {
                             try await CBUSManager.shared.stopAllTrains()
                         } catch {
