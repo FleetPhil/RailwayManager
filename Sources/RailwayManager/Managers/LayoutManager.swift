@@ -76,7 +76,7 @@ actor LayoutManager {
 
                         // An application error means the layout state can't be trusted:
                         // go to the error state, which stops all trains
-                        if case TrainError.applicationError = error, await self.layoutState != .error {
+                        if case TrainError.applicationError = error, self.layoutState != .error {
                             log.error("Application error processing \(event): layout error")
                             try? await self.setState(.error)
                         }
