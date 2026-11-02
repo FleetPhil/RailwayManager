@@ -417,6 +417,13 @@ actor LayoutManager {
         
         // Find the train in the sensor block
         guard let train = try await trackStateService.trainForBlock(sensor.location.block) else {
+            // An unexpected sensor while the layout is live means the track state can't be trusted:
+            // go to the error state, which stops all trains
+            if layoutState != .dormant && layoutState != .error {
+                log.error("Sensor \(sensor) set but no train in block \(sensor.location.block): layout error, stopping all trains")
+                try await setState(.error)
+                return
+            }
             throw TrainError.applicationError("Sensor \(sensor) set but no train in block \(sensor.location.block)")
         }
         

@@ -63,6 +63,10 @@ actor TrainSimulator {
         while !Task.isCancelled {
             do {
                 try await Task.sleep(for: pollInterval)
+                if await layoutManager.layoutState == .error {
+                    log.error("Simulator for train \(train): layout in error state")
+                    break
+                }
                 try await tick()
             } catch is CancellationError {
                 break
