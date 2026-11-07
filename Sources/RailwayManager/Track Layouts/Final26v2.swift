@@ -46,12 +46,16 @@ class Final26v2: Layout, @unchecked Sendable {
             Point(id: 12, address: 0, orientation: .left, defaultPosition: .splitBranch),
 
             // Crossover
-            Point(id: 21, address: 0, orientation: .right, defaultPosition: .splitStraight),
-            Point(id: 22, address: 0, orientation: .left, defaultPosition: .splitStraight),
-            Point(id: 23, address: 0, orientation: .left, defaultPosition: .splitStraight),
-            Point(id: 24, address: 0, orientation: .right, defaultPosition: .splitStraight),
+            Point(id: 21, address: 21, orientation: .right, defaultPosition: .splitStraight),
+            Point(id: 22, address: 21, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 23, address: 21, orientation: .left, defaultPosition: .splitStraight),
+            Point(id: 24, address: 21, orientation: .right, defaultPosition: .splitStraight),
         ]
         
+        // The crossover's four points share one accessory address (set it on all four when known) and switch together
+        let crossover = [point(21), point(22), point(23), point(24)]
+        for crossoverPoint in crossover { crossoverPoint.setGroup(crossover) }
+
         point(1).setConnection(from: .single, to: .block(block("B")))
         point(1).setConnection(from: .splitStraight, to: .block(block("A")))
         point(1).setConnection(from: .splitBranch, to: .point(point(3), .splitBranch))
@@ -238,14 +242,12 @@ class Final26v2: Layout, @unchecked Sendable {
             Sensor(id: 32, address: 32, location: .end(block("R"), 10)),
 
         ]
-        initialTrainBlocks = [1: block("A"), 2: block("C")]
+        initialTrainBlocks = [1: block("A"), 2: block("G")]
         
         // Parallel platforms: a train may stop in either
         alternativeEndBlocks = [
             block("A"): [block("E")],
             block("E"): [block("K")],
-            block("M"): [block("Q")],
-            block("Q"): [block("M")],
         ]
 
         buildLayout()

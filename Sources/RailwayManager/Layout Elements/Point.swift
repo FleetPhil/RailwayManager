@@ -86,6 +86,10 @@ final class Point: @unchecked Sendable, CustomStringConvertible {
     private(set) var connections: [ PointDirection : PointConnection]
     let defaultPosition: PointDirection?
 
+    // Other points that share this point's actuator (one accessory address switches them all together,
+    // e.g. a Kato double crossover). Wired once during layout init, like `connections`.
+    private(set) var group: [Point] = []
+
     init(id: Int,
          address: Int,
          connections: [ PointDirection : PointConnection] = [:],
@@ -105,6 +109,16 @@ final class Point: @unchecked Sendable, CustomStringConvertible {
         connections[connection] = to
     }
     
+    // Declare the points (not including this one) that are switched together with this one
+    func setGroup(_ points: [Point]) {
+        group = points.filter { $0 != self }
+    }
+
+    // The point of a group whose hardware is commanded when the whole group is reset (the lowest id)
+    var isGroupController: Bool {
+        group.allSatisfy { id < $0.id }
+    }
+
     func setDirection(_ direction: PointDirection) async throws {
         try await hardware.setPoint(id, direction: direction)
     }

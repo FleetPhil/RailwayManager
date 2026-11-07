@@ -295,12 +295,19 @@ actor LayoutTrackStateService {
             throw TrainError.unexpectedTrackState("No state for point \(point.id)")
         }
         pointStates[point]!.direction = newDirection
+        // Points sharing an actuator all move with it
+        for member in point.group { pointStates[member]?.direction = newDirection }
         
-        try await point.setDirection(newDirection)
+        // One command moves the whole group; a group reset commands it only from the controller
+        if !(override && !point.group.isEmpty && !point.isGroupController) {
+            try await point.setDirection(newDirection)
+        }
 
         // Telemetry: a publish failure must not fail the state change
-        let associatedBlock = pointStates[point]?.freeWithBlock?.id
-        try? await MQTTManager.shared.sendPointState(point: point, state: newDirection, associatedBlock: associatedBlock)
+        for changed in [point] + point.group {
+            let associatedBlock = pointStates[changed]?.freeWithBlock?.id
+            try? await MQTTManager.shared.sendPointState(point: changed, state: newDirection, associatedBlock: associatedBlock)
+        }
     }
     
     // Reset point to default condition or straight, override will set regardless of current stored state

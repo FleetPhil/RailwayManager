@@ -95,7 +95,8 @@ extension Layout {
                                                    from: pointSetting.direction,
                                                    accumulated: [],
                                                    visited: [])
-                    for (toBlock, settings, exitLeg) in paths {
+                    for (toBlock, chainSettings, exitLeg) in paths {
+                        let settings = settingsIncludingGroups(chainSettings)
                         // An unmatched link is reported by layoutIsValid(); keep the direction meanwhile
                         let toDirection = toBlock.entryDirection(through: .point(exitLeg)) ?? direction
                         routes.append(BlockRoute(fromBlock: block, toBlock: toBlock, direction: direction,
@@ -106,6 +107,18 @@ extension Layout {
         }
 
         return routes
+    }
+
+    // A grouped point (shared actuator, e.g. a double crossover) set to branch moves the whole group, so the
+    // route must reserve and set every member. Straight leaves the members free for other routes.
+    private func settingsIncludingGroups(_ settings: [PointSetting]) -> [PointSetting] {
+        var result = settings
+        for setting in settings where setting.direction == .splitBranch {
+            for member in setting.point.group where !result.contains(where: { $0.point == member }) {
+                result.append(PointSetting(point: member, direction: .splitBranch))
+            }
+        }
+        return result
     }
 
     // Returns all reachable (block, [PointSetting], exit leg) from the given point entry.
@@ -297,7 +310,19 @@ extension Layout {
         for (address, duplicates) in Dictionary(grouping: signals.filter({ $0.address != 0 }), by: \.address).sorted(by: { $0.key < $1.key }) where duplicates.count > 1 {
             throw TrainError.layoutError("Signals \(duplicates.map(\.id)) share hardware address \(address)")
         }
+        // (points in a group share an actuator, so must have the same address, and each lists the others)
+        for point in points {
+            for member in point.group {
+                if member.address != point.address {
+                    throw TrainError.layoutError("Points \(point.id) and \(member.id) are grouped but have different hardware addresses")
+                }
+                if !member.group.contains(point) {
+                    throw TrainError.layoutError("Point \(member.id) is in point \(point.id)'s group but does not list it")
+                }
+            }
+        }
         for (address, duplicates) in Dictionary(grouping: points.filter({ $0.address != 0 }), by: \.address).sorted(by: { $0.key < $1.key }) where duplicates.count > 1 {
+            if duplicates.allSatisfy({ point in duplicates.allSatisfy { $0 == point || point.group.contains($0) } }) { continue }
             throw TrainError.layoutError("Points \(duplicates.map(\.id)) share hardware address \(address)")
         }
         
