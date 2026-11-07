@@ -56,6 +56,9 @@ public final class DCCHardwarePoint: HardwarePoint, Sendable, CustomStringConver
     
     public func setPoint(_ id: PointID, direction: PointDirection) async throws {
         
+        // Ignore if no DCC is set
+        if GlobalOptions.noDCC { return }
+        
         let setDirection = isReversed ? direction.oppositeDirection : direction
         
         let command = dccPointCommand(address: address, direction: setDirection)
@@ -124,6 +127,9 @@ final class CBUSHardwarePoint: HardwarePoint, Sendable, CustomStringConvertible 
     }
     
     func setPoint(_ id: Int, direction: PointDirection) async throws {
+        // Ignore if no CBUS
+        if GlobalOptions.noCBUS { return }
+        
         var opCode: OpCode {
             if isReversed { return (direction == .splitStraight ? OpCode.ASON : .ASOF) }
             else { return (direction == .splitStraight ? OpCode.ASOF : .ASON) }

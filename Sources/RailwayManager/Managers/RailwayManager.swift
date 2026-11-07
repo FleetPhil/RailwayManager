@@ -33,12 +33,15 @@ enum LogLevel: String, CaseIterable, ExpressibleByArgument {
 // Track layouts selectable from the command line
 enum LayoutName: String, CaseIterable, ExpressibleByArgument {
     case testLoop2 = "TestLoop2"
-    case final = "Final"
+    case final = "Final26"
+    case finalv2 = "Final26v2"
     
     func makeLayout() -> Layout {
         switch self {
         case .testLoop2:    TestLoop2()
         case .final:        Final26()
+        case .finalv2:      Final26v2()
+    
         }
         
     }

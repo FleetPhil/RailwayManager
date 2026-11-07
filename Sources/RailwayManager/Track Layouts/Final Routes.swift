@@ -18,11 +18,17 @@ extension RailwayManager {
                 "r1": Routine(name: "r1", routes: [route1], repeatCount: 2, interval: 30),
                 "r2": Routine(name: "r2", routes: [route2], repeatCount: 2, interval: 30),
             ]
+        case is Final26v2:
+            guard let route3 = try? finalRoute3(layout: layout) else { return [:] }
+            return [
+                "r3": Routine(name: "r3", routes: [route3], repeatCount: 1, interval: 30),
+            ]
         default:
             return [:]
         }
     }
 
+    // Final26 routes
     // From A (where train 1 starts) to L forward, halting once wholly in L, then reverse into M, and back to A
     private static func finalRoute1(layout: Layout) throws -> Route {
         let segment1 = Segment(toBlock: layout.block("L"), direction: .forward, waitTime: .halt, stopAt: .entered)
@@ -44,6 +50,19 @@ extension RailwayManager {
         log.info("Route is \(route2)")
         
         return route2
+    }
+
+    // Final26v2 routes
+    // From A (where train 1 starts) to E forward, halting once wholly in E, then reverse into J
+    private static func finalRoute3(layout: Layout) throws -> Route {
+        let segment1 = Segment(toBlock: layout.block("E"), direction: .forward, waitTime: .halt)
+        let segment2 = Segment(toBlock: layout.block("J"), direction: .reverse, waitTime: .halt)
+        let segment3 = Segment(toBlock: layout.block("A"), direction: .forward, waitTime: .halt)
+        let route3 = Route(id: 3, segments: [segment1, segment2, segment3])
+        
+        log.info("Route is \(route3)")
+        
+        return route3
     }
 
 }
