@@ -13,14 +13,19 @@ actor SignalCoordinator {
             homeState[signal] = translate(signalIndication)
             distantState[signal] = .off     // Default value
         }
-        // Now check state of turnouts and next blocks for all green signals
-        for signal in homeState.filter({ $0.value == .go }).keys {
+        // Now check state of turnouts and next blocks for all green signals.
+        // Two passes: a signal's distant state repeats the next signal's home state, so every home state
+        // must be final (including its diverging direction) before any distant state is worked out,
+        // otherwise the result depends on the dictionary iteration order
+        let goSignals = homeState.filter({ $0.value == .go }).keys
+        for signal in goSignals {
             // Check if the route out of this block contains any diverging signals before the next block
             // If so set the signal state to right or left (initial direction)
             if let divergingDirection = divergingDirection(signal, snapshot) {
                 homeState[signal] = divergingDirection
             }
-
+        }
+        for signal in goSignals {
             // Find a signal in the next block for the direction a train passing this signal travels in it
             // and repeat its home state as this signal's distant state.
             // With no signal ahead (e.g. a siding or buffer stop) the distant shows caution.
