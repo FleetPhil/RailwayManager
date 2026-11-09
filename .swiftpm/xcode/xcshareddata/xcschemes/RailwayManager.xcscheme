@@ -57,16 +57,28 @@
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "-test r3"
-            isEnabled = "YES">
-         </CommandLineArgument>
-         <CommandLineArgument
-            argument = "-routine r1:1"
+            argument = "-layout window"
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "-routine r3:1"
+            argument = "-routine window:1"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-test window"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-test r3"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-routine r4:1"
             isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-routine r3:1"
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-routine r2:2"
@@ -77,8 +89,8 @@
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "-test r2"
-            isEnabled = "NO">
+            argument = "-test r4"
+            isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "--log-level info"
@@ -106,10 +118,10 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-noMQTT"
-            isEnabled = "NO">
+            isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "-layout Final26v2"
+            argument = "-layout Final26v4"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
