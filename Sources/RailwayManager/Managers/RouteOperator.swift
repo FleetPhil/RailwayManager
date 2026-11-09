@@ -286,12 +286,17 @@ actor RouteOperator {
     // The front of the train has set a sensor
     private func handleFrontSensor(_ sensor: Sensor, isStartOfBlock: Bool, isEndOfBlock: Bool) async throws {
         guard let frontItem else { return }      // Route not started
-        if isStartOfBlock && sensor.block == frontItem.toBlock {
-            // Start of the next block in the path
-            try await processOccupiedRouteBlock()
-        } else if sensor.block == frontItem.toBlock {
-            // Sensor is at the front of the train in the to block but after the start of block sensor
-            try await checkForTrainStop(sensor, byRear: false, isEndOfBlock: isEndOfBlock)
+        if sensor.block == frontItem.toBlock {
+            if isStartOfBlock {
+                // Start of the next block in the path
+                try await processOccupiedRouteBlock()
+            }
+            // Sensor is at the front of the train in the to block and is not only a start sensor.
+            // A .single sensor is both start and end, so it gets both steps, in this order:
+            // processOccupiedRouteBlock sets up any stop that checkForTrainStop then acts on
+            if isEndOfBlock || !isStartOfBlock {
+                try await checkForTrainStop(sensor, byRear: false, isEndOfBlock: isEndOfBlock)
+            }
         } else if isEndOfBlock && sensor.block == frontItem.fromBlock {
             // Sensor is at the front of the train at the end of the from block
             // Path has not incremented forward so likely this is because of a resource conflict
@@ -323,7 +328,8 @@ actor RouteOperator {
         // block: stop there instead. Any other front sensor is ignored
         var isLongTrainStop = false
         if isStoppingOnEntry && !byRear {
-            guard isEndOfBlock else { return }
+            // A .single sensor is also the start sensor: wait for the rear to pass it
+            guard isEndOfBlock, !sensor.location.isSingle else { return }
             log.warning("\(rd): Train \(train) reached the end of block \(sensor.block) before it was wholly in it: stopping")
             isLongTrainStop = true
         }
@@ -362,6 +368,9 @@ actor RouteOperator {
                 try await stateService.setStateForBlock(block, newState: .vacant)
             }
         }
+        // Every block but the stop block is now free, so no rear item has a block left to vacate: a later
+        // rear sensor event (a short train, or a .single sensor tripped by both ends) must not free them again
+        rearItems.removeAll()
         
         if let waitTime = currentSegment.waitTime {
             try await Task.sleep(for: .seconds(waitTime.timeInterval))
@@ -537,6 +546,22 @@ actor RouteOperator {
         if try await trainController.trainDirection(train) != nextItem.fromDirection {
             try await trainController.setTrainDirection(train, direction: nextItem.fromDirection)
             await stateService.reverseTravelDirection(of: train)
+            
+            // Reversing into a block the train still holds (it was straddling it, e.g. at a .single sensor
+            // that can't show the rear leaving): the train never vacated it, so hold it again and drop the
+            // rear item that would vacate it when the rear next passes the sensor in the block being left
+            let snapshot = await stateService.snapshot()
+            if let state = snapshot.blockState(nextItem.toBlock), state.train == train {
+                switch state {
+                case .occupied, .vacating:
+                    try await stateService.setStateForBlock(nextItem.toBlock, newState: .occupied(train, nextItem.toDirection))
+                    if let index = rearItems.dropLast().lastIndex(where: { $0.fromBlock == nextItem.toBlock }) {
+                        rearItems.remove(at: index)
+                    }
+                case .reserved, .vacant:
+                    break
+                }
+            }
         }
 
         // Allocate resources to the next block
@@ -671,6 +696,12 @@ actor RouteOperator {
     
     // The train has exited the toBlock on the rear path item
     private func processVacatedBlock(_ block: Block) async throws {
+        // Already vacant (freed by another path, e.g. the end of the route): just move the rear on
+        if try await stateService.blockIsVacant(block) {
+            log.debug("\(rd): Block \(block) already vacant when the rear left it")
+            rearItems.removeFirst()
+            return
+        }
         guard try await stateService.trainForBlock(block) == train else {
             throw TrainError.applicationError("Train \(train) is not valid for vacated block \(block)")
         }

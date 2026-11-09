@@ -81,6 +81,11 @@ actor LayoutTrackStateService {
         return blockState.train
     }
     
+    // True if the block has no train reserving, occupying or vacating it
+    func blockIsVacant(_ block: Block) -> Bool {
+        blockStates[block]?.isVacant ?? true
+    }
+    
     // Validate the transition and set the new state, throwing if the transition is not allowed
     func setStateForBlock(_ block: Block, newState: BlockRuntimeState) async throws {
         let oldState = blockStates[block] ?? .vacant
@@ -207,12 +212,18 @@ actor LayoutTrackStateService {
         // MARK: Critical section: no awaits until all resources are marked reserved (telemetry is sent after it)
         
         let oldState = blockStates[item.toBlock] ?? .vacant
+        // The train still holds toBlock (e.g. it reversed while straddling it): nothing to reserve there
+        var isHeldByTrain = false
         switch oldState {
         case .vacant:
             break
         case .occupied(let train, _), .vacating(let train, _):
-            log.debug("Route \(forTrain.id) reserve fails: \(item.toBlock) state is occupied/vacating by \(train)")
-            return .block(item.toBlock)
+            if train == forTrain {
+                isHeldByTrain = true
+            } else {
+                log.debug("Route \(forTrain.id) reserve fails: \(item.toBlock) state is occupied/vacating by \(train)")
+                return .block(item.toBlock)
+            }
         case .reserved(let train, _):
             if train != forTrain {
                 log.debug("Train \(forTrain) reserve fails: \(item) state is reserved for \(train)")
@@ -239,10 +250,14 @@ actor LayoutTrackStateService {
         }
 
         // All checks passed: mark the block, direction locks and points reserved
-        log.info("Block \(item.toBlock) state request from \(oldState) to \(BlockRuntimeState.reserved(forTrain, item.toDirection))")
+        if !isHeldByTrain {
+            log.info("Block \(item.toBlock) state request from \(oldState) to \(BlockRuntimeState.reserved(forTrain, item.toDirection))")
+        }
         // Clear any existing lock on this block for this train
         let isLockReleased = oldState.isVacant && removeDirectionLock(block: item.toBlock, train: forTrain)
-        blockStates[item.toBlock] = .reserved(forTrain, item.toDirection)
+        if !isHeldByTrain {
+            blockStates[item.toBlock] = .reserved(forTrain, item.toDirection)
+        }
         
         var lockedBlocks: [Block] = []
         for (vacantBlock, blockDirection) in contiguousBlocks where blockStates[vacantBlock]?.isVacant ?? true {
@@ -277,7 +292,9 @@ actor LayoutTrackStateService {
         }
         
         // Telemetry: a publish failure must not fail the reservation
-        try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain, item.toDirection), directionLocks: lockedTrains(item.toBlock))
+        if !isHeldByTrain {
+            try? await MQTTManager.shared.sendBlockRuntimeState(block: item.toBlock, blockState: .reserved(forTrain, item.toDirection), directionLocks: lockedTrains(item.toBlock))
+        }
         
         return nil
     }

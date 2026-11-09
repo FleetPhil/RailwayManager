@@ -52,6 +52,11 @@ enum SensorLocation: Comparable, Hashable {
         }
     }
 
+    // True if this is the only sensor in the block (both its start and its end)
+    var isSingle: Bool {
+        if case .single = self { true } else { false }
+    }
+
     var block: Block {
         switch self {
         case .end(let block, _):    block
